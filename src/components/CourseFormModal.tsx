@@ -105,6 +105,16 @@ export const CourseFormModal: React.FC<CourseFormModalProps> = ({
     if (progress && (Number(progress) < 0 || Number(progress) > 100)) {
       errs.progress = 'Progresso deve ser entre 0 e 100%'
     }
+    if (courseUrl.trim()) {
+      try {
+        const parsed = new URL(courseUrl.trim())
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          errs.courseUrl = 'O link deve começar com http:// ou https://'
+        }
+      } catch {
+        errs.courseUrl = 'URL inválida. Use o formato https://...'
+      }
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -335,9 +345,22 @@ export const CourseFormModal: React.FC<CourseFormModalProps> = ({
               type="url"
               placeholder="https://exemplo.com/curso"
               value={courseUrl}
-              onChange={(e) => setCourseUrl(e.target.value)}
-              className="rounded-xl text-xs sm:text-sm bg-background"
+              onChange={(e) => {
+                setCourseUrl(e.target.value)
+                if (errors.courseUrl) {
+                  setErrors((prev) => {
+                    const next = { ...prev }
+                    delete next.courseUrl
+                    return next
+                  })
+                }
+              }}
+              className={cn(
+                'rounded-xl text-xs sm:text-sm bg-background',
+                errors.courseUrl && 'border-destructive',
+              )}
             />
+            {errors.courseUrl && <p className="text-[11px] text-destructive">{errors.courseUrl}</p>}
           </div>
 
           {/* Cor de destaque */}

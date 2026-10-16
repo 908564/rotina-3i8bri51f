@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { StudyCertificate } from '@/lib/types'
 import { estudosRepository } from '@/lib/repositories/estudosRepository'
-import { compressBookCover } from '@/lib/imageCompressor'
+import { compressCertificateImage } from '@/lib/imageCompressor'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -80,12 +80,27 @@ export const StudyCertificatesTab: React.FC<StudyCertificatesTabProps> = ({
         setUploadTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1))
       }
 
+      const MAX_PDF_BYTES = 5 * 1024 * 1024 // 5 MB
+      const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB pós-compressão
+
       if (file.type === 'application/pdf') {
+        if (file.size > MAX_PDF_BYTES) {
+          const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
+          toast({
+            title: 'Arquivo PDF muito grande',
+            description: `O arquivo tem ${sizeMb} MB. O limite máximo permitido para PDF é de 5 MB.`,
+            variant: 'destructive',
+          })
+          setIsProcessing(false)
+          return
+        }
+
         setSelectedFileType('pdf')
-        // Lê PDF como base64 Data URL
         const reader = new FileReader()
         reader.onload = (e) => {
-          setSelectedFileData(e.target?.result as string)
+          const dataUrl = e.target?.result as string
+          setSelectedFileData(dataUrl)
+          setSelectedFileSize(file.size)
           setIsProcessing(false)
         }
         reader.onerror = () => {
@@ -98,9 +113,26 @@ export const StudyCertificatesTab: React.FC<StudyCertificatesTabProps> = ({
         reader.readAsDataURL(file)
       } else if (file.type.startsWith('image/')) {
         setSelectedFileType('image')
-        // Comprime imagem para economizar espaço no IndexedDB
-        const compressed = await compressBookCover(file)
+        // Comprime imagem para até 1600px de largura
+        const compressed = await compressCertificateImage(file)
+
+        // Calcula tamanho aproximado em bytes do base64 (sem o cabeçalho data:...;base64,)
+        const base64Content = compressed.split(',')[1] || ''
+        const approxCompressedBytes = Math.round((base64Content.length * 3) / 4)
+
+        if (approxCompressedBytes > MAX_IMAGE_BYTES) {
+          const sizeMb = (approxCompressedBytes / (1024 * 1024)).toFixed(1)
+          toast({
+            title: 'Imagem muito grande após compressão',
+            description: `A imagem ficou com ${sizeMb} MB após o processamento. O limite máximo permitido para imagem é de 3 MB.`,
+            variant: 'destructive',
+          })
+          setIsProcessing(false)
+          return
+        }
+
         setSelectedFileData(compressed)
+        setSelectedFileSize(approxCompressedBytes)
         setIsProcessing(false)
       } else {
         toast({

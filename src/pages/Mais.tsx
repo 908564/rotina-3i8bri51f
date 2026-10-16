@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   Settings,
   Moon,
@@ -16,9 +16,17 @@ import {
   CheckCircle2,
   AlertTriangle,
   Copy,
+  ShieldCheck,
+  ShieldAlert,
+  Database,
+  FileDown,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
-import { backupRepository, MAX_BACKUP_FILE_BYTES } from '@/lib/repositories/backupRepository'
+import {
+  backupRepository,
+  MAX_BACKUP_FILE_BYTES,
+  ValidationSummary,
+} from '@/lib/repositories/backupRepository'
 import { getTodayDateKey } from '@/lib/dateUtils'
 import { ModuleKey } from '@/lib/types'
 import { APP_VERSION } from '@/lib/version'
@@ -57,9 +65,48 @@ export default function MaisPage() {
     pendingActive: boolean
   } | null>(null)
 
+  // Storage info (cota e persistência)
+  const [isPersisted, setIsPersisted] = useState<boolean | null>(null)
+  const [storageEstimate, setStorageEstimate] = useState<{
+    usageMb: string
+    quotaMb: string
+    percent: number
+  } | null>(null)
+
+  // Importação e confirmação segura
+  const [pendingImportPayload, setPendingImportPayload] = useState<unknown | null>(null)
+  const [pendingValidation, setPendingValidation] = useState<ValidationSummary | null>(null)
+  const [currentCounts, setCurrentCounts] = useState<Record<string, number>>({})
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+
+  const checkStorage = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.storage) {
+        if (navigator.storage.persisted) {
+          const persisted = await navigator.storage.persisted()
+          setIsPersisted(persisted)
+        }
+        if (navigator.storage.estimate) {
+          const estimate = await navigator.storage.estimate()
+          const usageBytes = estimate.usage || 0
+          const quotaBytes = estimate.quota || 1
+          const usageMb = (usageBytes / (1024 * 1024)).toFixed(1)
+          const quotaMb = (quotaBytes / (1024 * 1024)).toFixed(0)
+          const percent = Math.min(100, Math.round((usageBytes / quotaBytes) * 100))
+          setStorageEstimate({ usageMb, quotaMb, percent })
+        }
+      }
+    } catch {
+      // Ignora erro se API não estiver acessível
+    }
+  }
+
+  useEffect(() => {
+    checkStorage()
+  }, [])
 
   // 1. TEMA
   const handleThemeChange = (newTheme: 'claro' | 'escuro' | 'sistema') => {
@@ -97,26 +144,40 @@ export default function MaisPage() {
     }
   }
 
-  // 3. EXPORTAR JSON
-  const handleExportData = async () => {
+  // 3. EXPORTAR JSON (com ou sem anexos)
+  const downloadBackupBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportData = async (omitAttachments = false) => {
     try {
-      const data = await backupRepository.exportAll()
+      const data = await backupRepository.exportAll({ omitAttachments })
       const jsonStr = JSON.stringify(data, null, 2)
       const blob = new Blob([jsonStr], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
+      const sizeBytes = blob.size
+      const sizeFormatted =
+        sizeBytes < 1024 * 1024
+          ? `${(sizeBytes / 1024).toFixed(1)} KB`
+          : `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
 
-      const link = document.createElement('a')
       const dateStr = getTodayDateKey()
-      link.href = url
-      link.download = `rotina_backup_${dateStr}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const suffix = omitAttachments ? '_sem_anexos' : ''
+      downloadBackupBlob(blob, `rotina_backup_${dateStr}${suffix}.json`)
 
       toast({
         title: 'Backup exportado com sucesso! ✓',
-        description: 'Arquivo JSON gerado com todos os dados e imagens.',
+        description: `Tamanho do arquivo: ${sizeFormatted}. ${
+          omitAttachments
+            ? 'Certificados e capas foram omitidos.'
+            : 'Todos os dados e anexos incluídos.'
+        }`,
       })
     } catch {
       toast({
@@ -126,12 +187,12 @@ export default function MaisPage() {
     }
   }
 
-  // 4. IMPORTAR JSON (com checagem de tamanho, validação item a item e transação atômica)
+  // 4. IMPORTAR JSON (pré-validação e abertura de diálogo de confirmação com resumo)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // 4.1 Checar tamanho do arquivo antes de parsear (limite: 50 MB)
+    // 4.1 Checar tamanho do arquivo antes de parsear (limite: 150 MB)
     if (file.size > MAX_BACKUP_FILE_BYTES) {
       const maxMb = Math.round(MAX_BACKUP_FILE_BYTES / (1024 * 1024))
       const fileMb = (file.size / (1024 * 1024)).toFixed(1)
@@ -144,7 +205,6 @@ export default function MaisPage() {
       return
     }
 
-    setImporting(true)
     try {
       const text = await file.text()
       let json: unknown
@@ -154,21 +214,87 @@ export default function MaisPage() {
         throw new Error('O arquivo não é um JSON válido. Verifique se o arquivo está corrompido.')
       }
 
-      const result = await backupRepository.importAll(json)
+      // Valida payload e obtém contagens
+      const summary = await backupRepository.validatePayload(json)
+      const counts = await backupRepository.getCollectionCounts()
+
+      setPendingImportPayload(json)
+      setPendingValidation(summary)
+      setCurrentCounts(counts)
+      setImportConfirmOpen(true)
+    } catch (err: any) {
+      toast({
+        title: 'Falha ao ler arquivo de backup',
+        description:
+          err.message || 'Arquivo inválido ou corrompido. Nenhum dado existente foi alterado.',
+        variant: 'destructive',
+      })
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  // Baixa cópia de segurança antes de substituir
+  const handleDownloadSafetyCopy = async () => {
+    try {
+      const currentData = await backupRepository.exportAll()
+      const jsonStr = JSON.stringify(currentData, null, 2)
+      const blob = new Blob([jsonStr], { type: 'application/json' })
+      const dateStr = getTodayDateKey()
+      downloadBackupBlob(blob, `rotina_copia_seguranca_pre_restauracao_${dateStr}.json`)
+      toast({
+        title: 'Cópia de segurança baixada! 💾',
+        description: 'Seus dados atuais foram salvos antes da restauração.',
+      })
+    } catch {
+      toast({
+        title: 'Não foi possível baixar cópia de segurança',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // Executa a substituição dos dados pelo backup
+  const handleConfirmImport = async () => {
+    if (!pendingImportPayload) return
+    setImporting(true)
+    try {
+      // Baixa automaticamente a cópia de segurança antes de substituir
+      try {
+        const currentData = await backupRepository.exportAll()
+        const jsonStr = JSON.stringify(currentData, null, 2)
+        const blob = new Blob([jsonStr], { type: 'application/json' })
+        const dateStr = getTodayDateKey()
+        downloadBackupBlob(blob, `rotina_copia_seguranca_automatica_${dateStr}.json`)
+      } catch {
+        // Prossegue se o download automático for bloqueado pelo navegador
+      }
+
+      const result = await backupRepository.importAll(pendingImportPayload)
 
       const ignoredMsg =
         result.ignoredCount > 0
           ? ` (${result.ignoredCount} registro${result.ignoredCount > 1 ? 's' : ''} inválido${result.ignoredCount > 1 ? 's' : ''} desconsiderado${result.ignoredCount > 1 ? 's' : ''})`
           : ''
 
+      const noAttachmentsMsg = !result.hasAttachments
+        ? ' Este backup não contém anexos (certificados e capas de livros não foram restaurados).'
+        : ''
+
       toast({
         title: 'Dados restaurados com sucesso! ✓',
-        description: `${result.importedCount} registros recuperados${ignoredMsg}. Recarregando tela...`,
+        description: `${result.importedCount} registros recuperados${ignoredMsg}.${noAttachmentsMsg} Recarregando tela...`,
       })
+
+      setImportConfirmOpen(false)
+      setPendingImportPayload(null)
+      setPendingValidation(null)
       notifyDataChanged()
+      checkStorage()
+
       setTimeout(() => {
         window.location.reload()
-      }, 900)
+      }, 1200)
     } catch (err: any) {
       toast({
         title: 'Falha ao restaurar dados',
@@ -178,7 +304,6 @@ export default function MaisPage() {
       })
     } finally {
       setImporting(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -401,7 +526,7 @@ export default function MaisPage() {
         </CardContent>
       </Card>
 
-      {/* 3. SEÇÃO BACKUP E DADOS */}
+      {/* 3. SEÇÃO BACKUP E ARMAZENAMENTO */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
           <div>
@@ -411,6 +536,54 @@ export default function MaisPage() {
             <p className="text-xs text-muted-foreground mt-0.5">
               Todos os seus dados estão salvos 100% no seu aparelho via IndexedDB.
             </p>
+          </div>
+
+          {/* Status de Persistência e Cota de Armazenamento */}
+          <div className="p-3 rounded-xl bg-background border border-border space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                {isPersisted ? (
+                  <ShieldCheck className="w-4 h-4 text-[#3D9C73]" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4 text-amber-500" />
+                )}
+                Armazenamento protegido:
+              </span>
+              <span
+                className={cn(
+                  'font-bold px-2 py-0.5 rounded-full text-[11px]',
+                  isPersisted ? 'bg-[#3D9C73]/15 text-[#3D9C73]' : 'bg-muted text-muted-foreground',
+                )}
+              >
+                {isPersisted === null ? 'Verificando...' : isPersisted ? 'Sim' : 'Não'}
+              </span>
+            </div>
+
+            {storageEstimate && (
+              <div className="space-y-1 pt-1 border-t border-border/60">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-[#F59E4C]" />
+                    Espaço usado pelo app:
+                  </span>
+                  <span className="font-semibold text-foreground text-xs">
+                    {storageEstimate.usageMb} MB / {storageEstimate.quotaMb} MB (
+                    {storageEstimate.percent}%)
+                  </span>
+                </div>
+
+                {/* Alerta se uso passar de 80% da cota */}
+                {storageEstimate.percent > 80 && (
+                  <div className="mt-2 p-2 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-2 text-destructive text-xs">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Atenção: o app está usando mais de 80% do espaço disponível. Exporte um backup
+                      e libere espaço para evitar falhas de gravação.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Input oculto para importação */}
@@ -425,19 +598,29 @@ export default function MaisPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
             <Button
               variant="outline"
-              onClick={handleExportData}
+              onClick={() => handleExportData(false)}
               className="min-h-[44px] h-11 rounded-xl text-xs font-semibold justify-start border-border gap-2"
             >
-              <Download className="w-4 h-4 text-[#F59E4C]" /> Exportar dados (JSON)
+              <Download className="w-4 h-4 text-[#F59E4C]" /> Exportar completo (JSON)
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExportData(true)}
+              className="min-h-[44px] h-11 rounded-xl text-xs font-semibold justify-start border-border gap-2"
+            >
+              <FileDown className="w-4 h-4 text-[#7C8CFF]" /> Exportar sem anexos
+            </Button>
+          </div>
+
+          <div className="pt-1">
             <Button
               variant="outline"
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
-              className="min-h-[44px] h-11 rounded-xl text-xs font-semibold justify-start border-border gap-2"
+              className="w-full min-h-[44px] h-11 rounded-xl text-xs font-semibold justify-start border-border gap-2"
             >
               <Upload className="w-4 h-4 text-[#34BEAA]" />{' '}
-              {importing ? 'Restaurando...' : 'Importar dados (Restaurar)'}
+              {importing ? 'Processando arquivo...' : 'Importar dados (Restaurar backup)'}
             </Button>
           </div>
 
@@ -459,7 +642,6 @@ export default function MaisPage() {
           </div>
         </CardContent>
       </Card>
-
       {/* 4. FEEDBACK E SUPORTE */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
@@ -535,6 +717,112 @@ export default function MaisPage() {
               className="rounded-xl text-xs bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
             >
               Confirmar e Ocultar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MODAL DE CONFIRMAÇÃO DE IMPORTAÇÃO SEGURA */}
+      <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
+        <AlertDialogContent className="rounded-2xl bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base sm:text-lg flex items-center gap-2 text-foreground">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              Substituir dados atuais?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground space-y-3 pt-1 text-left">
+              <span className="block font-medium text-foreground">
+                Isso substitui todos os dados atuais deste dispositivo pelos dados do arquivo.
+              </span>
+
+              {/* Aviso se o backup não contém anexos */}
+              {pendingValidation && !pendingValidation.hasAttachments && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs">
+                  ⚠️ <strong>Atenção:</strong> este arquivo de backup não contém anexos (fotos de
+                  capa ou certificados). Anexos atuais não serão restaurados se substituídos.
+                </div>
+              )}
+
+              {/* Tabela resumo comparativo */}
+              {pendingValidation && (
+                <div className="border border-border rounded-xl overflow-hidden bg-background">
+                  <div className="px-3 py-2 bg-muted/50 border-b border-border flex justify-between font-bold text-[11px] text-foreground">
+                    <span>Coleção</span>
+                    <span className="flex gap-6">
+                      <span className="w-14 text-right">Atual</span>
+                      <span className="w-14 text-right text-[#34BEAA]">Backup</span>
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border/60 text-[11px] max-h-48 overflow-y-auto">
+                    {[
+                      { key: 'escrita_notes', label: 'Escrita / Diário' },
+                      { key: 'livros', label: 'Livros' },
+                      { key: 'livro_anotacoes', label: 'Anotações de Leitura' },
+                      { key: 'leitura_historico', label: 'Histórico de Leitura' },
+                      { key: 'treino_plano_semanal', label: 'Planos de Treino' },
+                      { key: 'treino_log', label: 'Logs de Treino' },
+                      { key: 'courses', label: 'Cursos e Matérias' },
+                      { key: 'study_pages', label: 'Páginas de Estudo' },
+                      { key: 'study_certificates', label: 'Certificados' },
+                      { key: 'study_sessions', label: 'Sessões de Estudo' },
+                      { key: 'projects', label: 'Projetos (Trabalho)' },
+                      { key: 'achievements', label: 'Conquistas' },
+                      { key: 'experiences', label: 'Experiências' },
+                      { key: 'work_notes', label: 'Notas de Trabalho' },
+                    ].map((col) => {
+                      const cur = currentCounts[col.key] || 0
+                      const backupCol =
+                        (pendingValidation.validPayload.collections as any)[col.key] || []
+                      const bkp = backupCol.length
+                      return (
+                        <div
+                          key={col.key}
+                          className="px-3 py-1.5 flex justify-between items-center"
+                        >
+                          <span className="text-muted-foreground">{col.label}</span>
+                          <span className="flex gap-6 font-semibold">
+                            <span className="w-14 text-right text-foreground">{cur}</span>
+                            <span className="w-14 text-right text-[#34BEAA]">{bkp}</span>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Botão de segurança */}
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleDownloadSafetyCopy}
+                  className="w-full h-9 rounded-xl text-xs font-semibold border-border gap-2 text-foreground"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#F59E4C]" /> Baixar cópia atual primeiro
+                </Button>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
+            <AlertDialogCancel
+              disabled={importing}
+              onClick={() => {
+                setImportConfirmOpen(false)
+                setPendingImportPayload(null)
+                setPendingValidation(null)
+              }}
+              className="rounded-xl text-xs"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={importing}
+              onClick={handleConfirmImport}
+              className="rounded-xl text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+            >
+              {importing ? 'Substituindo...' : 'Substituir dados'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

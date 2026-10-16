@@ -127,6 +127,8 @@ export const StudyBlockEditor: React.FC<StudyBlockEditorProps> = ({
           }),
         )
         if (onSaved) onSaved(saved)
+      } catch {
+        // Preserva o conteúdo digitado e o estado dirty para não perder dados
       } finally {
         setIsSaving(false)
       }

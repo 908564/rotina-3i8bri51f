@@ -16,7 +16,9 @@
  *     O backup usa 4 porque passou por mais iterações de payload histórico que o banco bruto.
  */
 
-export const APP_VERSION = '0.0.8'
+import packageJson from '../../package.json'
+
+export const APP_VERSION = packageJson.version
 
 /** Versão estrutural do IndexedDB (rotina_db) */
 export const DB_VERSION = 3

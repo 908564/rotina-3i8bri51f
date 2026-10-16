@@ -22,20 +22,46 @@ import {
   ModuleKey,
 } from '../types'
 
-/** Limite máximo padrão para arquivo de backup (50 MB) */
-export const MAX_BACKUP_FILE_BYTES = 50 * 1024 * 1024
+/** Limite máximo padrão para arquivo de backup (150 MB) */
+export const MAX_BACKUP_FILE_BYTES = 150 * 1024 * 1024
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/**
+ * Validação de data URL permitida para imagem (PNG, JPEG, WEBP, GIF em base64)
+ */
+const ALLOWED_IMAGE_DATA_URL_REGEX = /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i
+
+/**
+ * Validação de data URL permitida para certificado (PDF ou imagem em base64)
+ */
+const ALLOWED_CERTIFICATE_DATA_URL_REGEX =
+  /^data:(application\/pdf|image\/(png|jpeg|jpg|webp|gif));base64,/i
+
+/**
+ * Valida se a URL é HTTP ou HTTPS absoluta
+ */
+function isValidHttpUrl(url: unknown): boolean {
+  if (typeof url !== 'string' || !url.trim()) return false
+  try {
+    const parsed = new URL(url.trim())
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 export interface ValidationSummary {
   validPayload: ExportDataPayload
   ignoredCount: number
   ignoredDetails: { collection: string; reason: string }[]
+  hasAttachments: boolean
 }
 
 export interface ImportResult {
   importedCount: number
   ignoredCount: number
+  hasAttachments: boolean
 }
 
 function isValidIsoDate(value: unknown): boolean {
@@ -111,6 +137,15 @@ function sanitizeLivro(item: any): Livro | null {
         }))
     : []
 
+  // Validação de coverPhoto: aceitar apenas data URL de imagem permitida.
+  // Se for string mas não casar com data URL permitida, descarta o valor (coverPhoto vira undefined).
+  let coverPhoto: string | undefined = undefined
+  if (typeof item.coverPhoto === 'string' && item.coverPhoto.trim()) {
+    if (ALLOWED_IMAGE_DATA_URL_REGEX.test(item.coverPhoto.trim())) {
+      coverPhoto = item.coverPhoto.trim()
+    }
+  }
+
   return {
     id: item.id,
     title: item.title,
@@ -118,7 +153,7 @@ function sanitizeLivro(item: any): Livro | null {
     totalPages: typeof item.totalPages === 'number' ? item.totalPages : undefined,
     currentPage: typeof item.currentPage === 'number' ? Math.max(0, item.currentPage) : 0,
     status: validStatus,
-    coverPhoto: typeof item.coverPhoto === 'string' ? item.coverPhoto : undefined,
+    coverPhoto,
     goal,
     goalHistory,
     created: item.created,
@@ -223,6 +258,14 @@ function sanitizeCourse(item: any): Course | null {
     ? item.status
     : 'em_andamento'
 
+  // Valida courseUrl: aceitar apenas http:// ou https://. Descarta apenas o valor se inválido.
+  let validCourseUrl: string | undefined = undefined
+  if (typeof item.courseUrl === 'string' && item.courseUrl.trim()) {
+    if (isValidHttpUrl(item.courseUrl)) {
+      validCourseUrl = item.courseUrl.trim()
+    }
+  }
+
   return {
     id: item.id,
     name: item.name,
@@ -234,7 +277,7 @@ function sanitizeCourse(item: any): Course | null {
     workloadHours: typeof item.workloadHours === 'number' ? item.workloadHours : undefined,
     startDate: item.startDate,
     endDate: typeof item.endDate === 'string' ? item.endDate : undefined,
-    courseUrl: typeof item.courseUrl === 'string' ? item.courseUrl : undefined,
+    courseUrl: validCourseUrl,
     color: typeof item.color === 'string' ? item.color : undefined,
     icon: typeof item.icon === 'string' ? item.icon : undefined,
     created: item.created,
@@ -278,14 +321,23 @@ function sanitizeStudyCertificate(item: any): StudyCertificate | null {
     return null
   }
 
-  const fileType = item.fileType === 'pdf' ? 'pdf' : 'image'
+  const trimmedData = item.fileData.trim()
+  // Regra 4: fileData de certificados no backup: aceitar apenas data URLs
+  // começando com "data:application/pdf;base64," ou "data:image/(png|jpeg|webp|gif);base64,";
+  // registros fora disso são ignorados e contados como inválidos.
+  if (!ALLOWED_CERTIFICATE_DATA_URL_REGEX.test(trimmedData)) {
+    return null
+  }
+
+  const isPdf = trimmedData.startsWith('data:application/pdf;')
+  const fileType = isPdf ? 'pdf' : 'image'
 
   return {
     id: item.id,
     courseId: item.courseId,
     title: item.title,
     issueDate: typeof item.issueDate === 'string' ? item.issueDate : undefined,
-    fileData: item.fileData,
+    fileData: trimmedData,
     fileType,
     fileName: item.fileName,
     fileSize: typeof item.fileSize === 'number' ? item.fileSize : undefined,
@@ -479,23 +531,59 @@ function sanitizeSettings(item: any): AppSettings | undefined {
 }
 
 export const backupRepository = {
-  async exportAll(): Promise<ExportDataPayload> {
+  async getCollectionCounts(): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {}
+    const stores = [
+      { key: 'escrita_notes', store: idb.STORE_ESCRITA },
+      { key: 'livros', store: idb.STORE_LIVROS },
+      { key: 'livro_anotacoes', store: idb.STORE_LIVRO_ANOTACOES },
+      { key: 'leitura_historico', store: idb.STORE_LEITURA_HISTORICO },
+      { key: 'treino_plano_semanal', store: idb.STORE_TREINO_PLANO },
+      { key: 'treino_log', store: idb.STORE_TREINO_LOG },
+      { key: 'courses', store: idb.STORE_COURSES },
+      { key: 'study_pages', store: idb.STORE_STUDY_PAGES },
+      { key: 'study_certificates', store: idb.STORE_STUDY_CERTIFICATES },
+      { key: 'study_sessions', store: idb.STORE_STUDY_SESSIONS },
+      { key: 'study_goals', store: idb.STORE_STUDY_GOALS },
+      { key: 'projects', store: idb.STORE_PROJECTS },
+      { key: 'achievements', store: idb.STORE_ACHIEVEMENTS },
+      { key: 'experiences', store: idb.STORE_EXPERIENCES },
+      { key: 'work_notes', store: idb.STORE_WORK_NOTES },
+    ]
+
+    for (const { key, store } of stores) {
+      const items = await idb.getAll(store)
+      counts[key] = items.length
+    }
+    return counts
+  },
+
+  async exportAll(options?: { omitAttachments?: boolean }): Promise<ExportDataPayload> {
     const settings = settingsRepository.getSettings()
     const escrita_notes = await idb.getAll<EscritaNote>(idb.STORE_ESCRITA)
-    const livros = await idb.getAll<Livro>(idb.STORE_LIVROS)
+    let livros = await idb.getAll<Livro>(idb.STORE_LIVROS)
     const livro_anotacoes = await idb.getAll<LivroAnotacao>(idb.STORE_LIVRO_ANOTACOES)
     const leitura_historico = await idb.getAll<LeituraHistorico>(idb.STORE_LEITURA_HISTORICO)
     const treino_plano_semanal = await idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO)
     const treino_log = await idb.getAll<TreinoLog>(idb.STORE_TREINO_LOG)
     const courses = await idb.getAll<Course>(idb.STORE_COURSES)
     const study_pages = await idb.getAll<StudyPage>(idb.STORE_STUDY_PAGES)
-    const study_certificates = await idb.getAll<StudyCertificate>(idb.STORE_STUDY_CERTIFICATES)
+    let study_certificates = await idb.getAll<StudyCertificate>(idb.STORE_STUDY_CERTIFICATES)
     const study_sessions = await idb.getAll<StudySession>(idb.STORE_STUDY_SESSIONS)
     const study_goals = await idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS)
     const projects = await idb.getAll<Project>(idb.STORE_PROJECTS)
     const achievements = await idb.getAll<Achievement>(idb.STORE_ACHIEVEMENTS)
     const experiences = await idb.getAll<Experience>(idb.STORE_EXPERIENCES)
     const work_notes = await idb.getAll<WorkNote>(idb.STORE_WORK_NOTES)
+
+    if (options?.omitAttachments) {
+      livros = livros.map((book) => {
+        const { coverPhoto, ...rest } = book
+        return rest
+      })
+      // Em certificados, omite certificados com fileData vazio para não quebrar a validação na importação
+      study_certificates = []
+    }
 
     return {
       schemaVersion: BACKUP_SCHEMA_VERSION,
@@ -658,10 +746,18 @@ export const backupRepository = {
       },
     }
 
+    // Detecta se o payload contém anexos (capas de livros ou certificados com arquivo)
+    const hasBookCovers = sanitizedLivros.some((b) => Boolean(b.coverPhoto))
+    const hasCertFiles = sanitizedStudyCertificates.some((c) =>
+      Boolean(c.fileData && c.fileData.trim()),
+    )
+    const hasAttachments = hasBookCovers || hasCertFiles
+
     return {
       validPayload,
       ignoredCount,
       ignoredDetails,
+      hasAttachments,
     }
   },
 
@@ -672,7 +768,7 @@ export const backupRepository = {
    * 3. Se qualquer erro ocorrer, a transação sofre rollback no motor IDB sem deixar órfãos.
    */
   async importAll(payload: unknown): Promise<ImportResult> {
-    const { validPayload, ignoredCount } = await this.validatePayload(payload)
+    const { validPayload, ignoredCount, hasAttachments } = await this.validatePayload(payload)
     const c = validPayload.collections
 
     const allStores = [
@@ -820,6 +916,7 @@ export const backupRepository = {
     return {
       importedCount: totalImported,
       ignoredCount,
+      hasAttachments,
     }
   },
 
@@ -854,5 +951,32 @@ export const backupRepository = {
       ...current,
       hasSeenOnboarding: true,
     })
+
+    // Remove todas as chaves de localStorage usadas pelo app
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const appLocalStorageKeys = [
+          'rotina_last_book_id',
+          'rotina_last_opened_page',
+          'rotina_last_course_time',
+          'rotina_active_tab',
+          'rotina_active_course_tab',
+          'rotina_active_trabalho_tab',
+        ]
+        appLocalStorageKeys.forEach((k) => localStorage.removeItem(k))
+
+        // Também varre quaisquer chaves com prefixo rotina_ exceto as configurações ativas que acabamos de setar
+        const keysToRemove: string[] = []
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && key.startsWith('rotina_') && key !== 'rotina_settings') {
+            keysToRemove.push(key)
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k))
+      }
+    } catch {
+      // Ignora erro de acesso a localStorage
+    }
   },
 }

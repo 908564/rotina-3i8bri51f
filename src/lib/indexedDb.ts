@@ -148,6 +148,38 @@ async function getFromStore<T>(storeName: string, key: IDBValidKey): Promise<T |
   })
 }
 
+export function isQuotaExceededError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const err = error as { name?: string; message?: string; code?: number }
+  return (
+    err.name === 'QuotaExceededError' ||
+    err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    err.code === 22 ||
+    (typeof err.message === 'string' && /quota/i.test(err.message))
+  )
+}
+
+// Listener para notificação global de QuotaExceededError
+type QuotaErrorListener = () => void
+const quotaErrorListeners = new Set<QuotaErrorListener>()
+
+export function onQuotaExceeded(listener: QuotaErrorListener): () => void {
+  quotaErrorListeners.add(listener)
+  return () => {
+    quotaErrorListeners.delete(listener)
+  }
+}
+
+export function notifyQuotaExceeded(): void {
+  quotaErrorListeners.forEach((fn) => {
+    try {
+      fn()
+    } catch {
+      // Ignora falhas nos listeners
+    }
+  })
+}
+
 async function putInStore<T>(storeName: string, value: T): Promise<void> {
   const db = await getDB()
   return new Promise((resolve, reject) => {
@@ -155,7 +187,20 @@ async function putInStore<T>(storeName: string, value: T): Promise<void> {
     const store = tx.objectStore(storeName)
     const request = store.put(value)
     request.onsuccess = () => resolve()
-    request.onerror = () => reject(request.error)
+    request.onerror = () => {
+      const err = request.error || tx.error
+      if (isQuotaExceededError(err)) {
+        notifyQuotaExceeded()
+      }
+      reject(err)
+    }
+    tx.onerror = () => {
+      const err = tx.error || request.error
+      if (isQuotaExceededError(err)) {
+        notifyQuotaExceeded()
+      }
+      reject(err)
+    }
   })
 }
 
@@ -206,11 +251,19 @@ async function runTransaction<T>(
     }
 
     tx.onerror = () => {
-      reject(tx.error || new Error('Transação IndexedDB falhou'))
+      const err = tx.error || new Error('Transação IndexedDB falhou')
+      if (isQuotaExceededError(err)) {
+        notifyQuotaExceeded()
+      }
+      reject(err)
     }
 
     tx.onabort = () => {
-      reject(tx.error || new Error('Transação IndexedDB abortada'))
+      const err = tx.error || new Error('Transação IndexedDB abortada')
+      if (isQuotaExceededError(err)) {
+        notifyQuotaExceeded()
+      }
+      reject(err)
     }
 
     Promise.resolve()
@@ -253,4 +306,7 @@ export const idb = {
   clear: clearStore,
   runTransaction,
   getDB,
+  isQuotaExceededError,
+  notifyQuotaExceeded,
+  onQuotaExceeded,
 }

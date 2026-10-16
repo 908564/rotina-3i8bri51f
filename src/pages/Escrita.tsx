@@ -92,7 +92,7 @@ export default function EscritaPage() {
   // Salvar no repositório com debounce de 600ms
   const persistNote = useCallback(
     async (noteTitle: string, noteBody: string, noteTags: string[]) => {
-      // Não salva nota em branco se não existia nada
+      // Se não há conteúdo, não grava registro vazio
       if (!noteTitle.trim() && !noteBody.trim() && noteTags.length === 0) {
         setSaveStatus('idle')
         return
@@ -112,12 +112,12 @@ export default function EscritaPage() {
           setSaveStatus((prev) => (prev === 'saved' ? 'idle' : prev))
         }, 2000)
       } catch {
+        // Preserva o texto na tela para o usuário não perder o que digitou
         setSaveStatus('idle')
       }
     },
     [currentDate, notifyDataChanged, refreshAllNotesDates],
   )
-
   // Dispara debounce sempre que título, corpo ou tags mudarem
   const triggerAutoSave = (newT: string, newB: string, newTags: string[]) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)

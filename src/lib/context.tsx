@@ -3,6 +3,8 @@ import { AppSettings, ModuleKey } from './types'
 import { settingsRepository } from './repositories/settingsRepository'
 import { loadSampleData } from './repositories/sampleData'
 import { backupRepository } from './repositories/backupRepository'
+import { onQuotaExceeded } from './indexedDb'
+import { toast } from '@/hooks/use-toast'
 
 interface AppContextValue {
   settings: AppSettings
@@ -23,6 +25,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const notifyDataChanged = useCallback(() => {
     setDataVersion((v) => v + 1)
+  }, [])
+
+  // 1. Solicita persistência de armazenamento na primeira abertura (silencioso se indisponível)
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {
+        // Ignora silenciosamente se o navegador rejeitar ou não suportar
+      })
+    }
+  }, [])
+
+  // 2. Escuta global de QuotaExceededError para emitir o toast padronizado
+  useEffect(() => {
+    let lastToastTime = 0
+    const unsubscribe = onQuotaExceeded(() => {
+      const now = Date.now()
+      // Evita spam de toasts se múltiplas gravações falharem em sequência (throttle 3s)
+      if (now - lastToastTime > 3000) {
+        lastToastTime = now
+        toast({
+          title: 'Espaço insuficiente',
+          description: 'Espaço insuficiente: exporte um backup e libere espaço.',
+          variant: 'destructive',
+        })
+      }
+    })
+    return unsubscribe
   }, [])
 
   // Atualiza classe HTML para dark mode baseado no tema
