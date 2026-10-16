@@ -49,33 +49,53 @@ export const estudosRepository = {
   },
 
   async deleteCourse(id: string): Promise<void> {
-    await idb.delete(idb.STORE_COURSES, id)
+    // Coleta IDs filhos antes da transação para exclusão atômica em bloco
+    const [pages, certs, sessions, goal] = await Promise.all([
+      this.getPagesByCourse(id),
+      this.getCertificatesByCourse(id),
+      this.getSessionsByCourse(id),
+      this.getGoalByCourse(id),
+    ])
 
-    // Remove páginas associadas
-    const pages = await this.getPagesByCourse(id)
-    for (const p of pages) {
-      await idb.delete(idb.STORE_STUDY_PAGES, p.id)
-    }
+    await idb.runTransaction(
+      [
+        idb.STORE_COURSES,
+        idb.STORE_STUDY_PAGES,
+        idb.STORE_STUDY_CERTIFICATES,
+        idb.STORE_STUDY_SESSIONS,
+        idb.STORE_STUDY_GOALS,
+      ],
+      'readwrite',
+      (tx) => {
+        // Deleta o curso
+        tx.objectStore(idb.STORE_COURSES).delete(id)
 
-    // Remove certificados associados
-    const certs = await this.getCertificatesByCourse(id)
-    for (const c of certs) {
-      await idb.delete(idb.STORE_STUDY_CERTIFICATES, c.id)
-    }
+        // Deleta páginas associadas
+        const pagesStore = tx.objectStore(idb.STORE_STUDY_PAGES)
+        for (const p of pages) {
+          pagesStore.delete(p.id)
+        }
 
-    // Remove sessões associadas
-    const sessions = await this.getSessionsByCourse(id)
-    for (const s of sessions) {
-      await idb.delete(idb.STORE_STUDY_SESSIONS, s.id)
-    }
+        // Deleta certificados associados
+        const certsStore = tx.objectStore(idb.STORE_STUDY_CERTIFICATES)
+        for (const c of certs) {
+          certsStore.delete(c.id)
+        }
 
-    // Remove meta associada
-    const goal = await this.getGoalByCourse(id)
-    if (goal) {
-      await idb.delete(idb.STORE_STUDY_GOALS, goal.id)
-    }
+        // Deleta sessões associadas
+        const sessionsStore = tx.objectStore(idb.STORE_STUDY_SESSIONS)
+        for (const s of sessions) {
+          sessionsStore.delete(s.id)
+        }
 
-    // Limpa última página se era desse curso
+        // Deleta meta associada
+        if (goal) {
+          tx.objectStore(idb.STORE_STUDY_GOALS).delete(goal.id)
+        }
+      },
+    )
+
+    // Limpa última página se era desse curso (após confirmação de commit do IDB)
     const lastPage = this.getLastOpenedPage()
     if (lastPage && lastPage.courseId === id) {
       localStorage.removeItem(LAST_OPENED_PAGE_KEY)
@@ -361,12 +381,27 @@ export const estudosRepository = {
     }
   },
 
-  // Obtém meta histórica vigente em uma data específica
-  getEffectiveWeeklyGoalForDate(goal: StudyGoal, date: string): number {
-    if (!goal.history || goal.history.length === 0) return goal.weeklyMinutes
+  // Obtém meta histórica vigente em uma data específica (ou undefined se antes da criação/primeira meta)
+  getEffectiveWeeklyGoalForDate(goal: StudyGoal, date: string): number | undefined {
+    if (!goal) return undefined
+    if (!goal.history || goal.history.length === 0) {
+      // Se não há histórico explícito, usa a data de criação (ou do registro) como limite:
+      // se a data for anterior ao dia em que a meta foi criada, o passado não tinha meta.
+      const createdDate = goal.created ? goal.created.substring(0, 10) : undefined
+      if (createdDate && date < createdDate) {
+        return undefined
+      }
+      return goal.weeklyMinutes
+    }
 
     const sorted = [...goal.history].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
-    let effective = goal.weeklyMinutes
+
+    // Se a data solicitada é anterior à primeiríssima meta estabelecida, naquela época não havia meta
+    if (sorted[0].effectiveDate > date) {
+      return undefined
+    }
+
+    let effective: number | undefined = undefined
     for (const h of sorted) {
       if (h.effectiveDate <= date) {
         effective = h.weeklyMinutes

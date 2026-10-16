@@ -241,11 +241,22 @@ export default function TrabalhoPage() {
 
     const text = lines.join('\n\n')
 
-    await navigator.clipboard.writeText(text)
-    toast({
-      title: `${selected.length} conquistas copiadas! 📋`,
-      description: 'Texto formatado em tópicos copiado para a área de transferência.',
-    })
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Área de transferência não suportada neste navegador.')
+      }
+      await navigator.clipboard.writeText(text)
+      toast({
+        title: `${selected.length} conquistas copiadas! 📋`,
+        description: 'Texto formatado em tópicos copiado para a área de transferência.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Não foi possível copiar o texto',
+        description: err?.message || 'Permissão negada ou recurso não suportado neste navegador.',
+        variant: 'destructive',
+      })
+    }
   }
 
   // ========================

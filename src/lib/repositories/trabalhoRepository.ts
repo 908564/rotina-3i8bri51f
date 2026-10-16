@@ -62,7 +62,25 @@ export const trabalhoRepository = {
   },
 
   async deleteProject(id: string): Promise<void> {
-    await idb.delete(idb.STORE_PROJECTS, id)
+    // Busca conquistas vinculadas ao projeto para desvincular ou manter integridade
+    const achievements = await this.getAchievements()
+    const linkedAchievements = achievements.filter((a) => a.projectId === id)
+
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_ACHIEVEMENTS], 'readwrite', (tx) => {
+      // Deleta o projeto
+      tx.objectStore(idb.STORE_PROJECTS).delete(id)
+
+      // Limpa o vínculo projectId das conquistas associadas para não deixar referência inválida
+      const achStore = tx.objectStore(idb.STORE_ACHIEVEMENTS)
+      for (const ach of linkedAchievements) {
+        const updatedAch: Achievement = {
+          ...ach,
+          projectId: undefined,
+          updated: new Date().toISOString(),
+        }
+        achStore.put(updatedAch)
+      }
+    })
   },
 
   async toggleTask(projectId: string, taskId: string): Promise<Project | undefined> {

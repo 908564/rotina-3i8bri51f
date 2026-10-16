@@ -153,17 +153,29 @@ export const leituraRepository = {
   },
 
   async deleteLivro(id: string): Promise<void> {
-    await idb.delete(idb.STORE_LIVROS, id)
+    // Coleta registros filhos para exclusão atômica em bloco
+    const [anotacoes, historico] = await Promise.all([
+      this.getAnotacoesByBook(id),
+      this.getHistoricoByBook(id),
+    ])
 
-    // Remove anotações e histórico associados
-    const anotacoes = await this.getAnotacoesByBook(id)
-    for (const a of anotacoes) {
-      await idb.delete(idb.STORE_LIVRO_ANOTACOES, a.id)
-    }
-    const historico = await this.getHistoricoByBook(id)
-    for (const h of historico) {
-      await idb.delete(idb.STORE_LEITURA_HISTORICO, h.id)
-    }
+    await idb.runTransaction(
+      [idb.STORE_LIVROS, idb.STORE_LIVRO_ANOTACOES, idb.STORE_LEITURA_HISTORICO],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_LIVROS).delete(id)
+
+        const anotacoesStore = tx.objectStore(idb.STORE_LIVRO_ANOTACOES)
+        for (const a of anotacoes) {
+          anotacoesStore.delete(a.id)
+        }
+
+        const histStore = tx.objectStore(idb.STORE_LEITURA_HISTORICO)
+        for (const h of historico) {
+          histStore.delete(h.id)
+        }
+      },
+    )
   },
 
   // Anotações

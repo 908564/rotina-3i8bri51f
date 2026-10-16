@@ -18,9 +18,10 @@ import {
   Copy,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
-import { backupRepository } from '@/lib/repositories/backupRepository'
+import { backupRepository, MAX_BACKUP_FILE_BYTES } from '@/lib/repositories/backupRepository'
 import { getTodayDateKey } from '@/lib/dateUtils'
 import { ModuleKey } from '@/lib/types'
+import { APP_VERSION } from '@/lib/version'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -125,29 +126,54 @@ export default function MaisPage() {
     }
   }
 
-  // 4. IMPORTAR JSON (com validação e rollback completo se falhar)
+  // 4. IMPORTAR JSON (com checagem de tamanho, validação item a item e transação atômica)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // 4.1 Checar tamanho do arquivo antes de parsear (limite: 50 MB)
+    if (file.size > MAX_BACKUP_FILE_BYTES) {
+      const maxMb = Math.round(MAX_BACKUP_FILE_BYTES / (1024 * 1024))
+      const fileMb = (file.size / (1024 * 1024)).toFixed(1)
+      toast({
+        title: 'Arquivo muito grande',
+        description: `O arquivo selecionado possui ${fileMb} MB, excedendo o limite máximo de ${maxMb} MB para restauração.`,
+        variant: 'destructive',
+      })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     setImporting(true)
     try {
       const text = await file.text()
-      const json = JSON.parse(text)
-      await backupRepository.importAll(json)
+      let json: unknown
+      try {
+        json = JSON.parse(text)
+      } catch {
+        throw new Error('O arquivo não é um JSON válido. Verifique se o arquivo está corrompido.')
+      }
+
+      const result = await backupRepository.importAll(json)
+
+      const ignoredMsg =
+        result.ignoredCount > 0
+          ? ` (${result.ignoredCount} registro${result.ignoredCount > 1 ? 's' : ''} inválido${result.ignoredCount > 1 ? 's' : ''} desconsiderado${result.ignoredCount > 1 ? 's' : ''})`
+          : ''
 
       toast({
-        title: 'Dados restaurados com sucesso ✓',
-        description: 'Todas as suas anotações, leituras e treinos foram recuperados.',
+        title: 'Dados restaurados com sucesso! ✓',
+        description: `${result.importedCount} registros recuperados${ignoredMsg}. Recarregando tela...`,
       })
       notifyDataChanged()
       setTimeout(() => {
         window.location.reload()
-      }, 800)
+      }, 900)
     } catch (err: any) {
       toast({
         title: 'Falha ao restaurar dados',
-        description: err.message || 'Arquivo inválido ou corrompido. Nenhum dado foi alterado.',
+        description:
+          err.message || 'Arquivo inválido ou corrompido. Nenhum dado existente foi alterado.',
         variant: 'destructive',
       })
     } finally {
@@ -192,13 +218,24 @@ export default function MaisPage() {
   // 7. FEEDBACK & COMPARTILHAR
   const handleCopyFeedback = async () => {
     if (!feedbackText.trim()) return
-    await navigator.clipboard.writeText(feedbackText.trim())
-    toast({
-      title: 'Texto copiado! 📋',
-      description: 'Cole em seu aplicativo de mensagens favorito.',
-    })
-    setFeedbackModalOpen(false)
-    setFeedbackText('')
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Área de transferência não suportada.')
+      }
+      await navigator.clipboard.writeText(feedbackText.trim())
+      toast({
+        title: 'Texto copiado! 📋',
+        description: 'Cole em seu aplicativo de mensagens favorito.',
+      })
+      setFeedbackModalOpen(false)
+      setFeedbackText('')
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao copiar texto',
+        description: err?.message || 'Permissão negada ao acessar a área de transferência.',
+        variant: 'destructive',
+      })
+    }
   }
 
   const handleShareApp = async () => {
@@ -212,14 +249,25 @@ export default function MaisPage() {
         })
         return
       } catch {
-        // Fallback para clipboard
+        // Fallback para clipboard se compartilhamento for cancelado ou não suportado
       }
     }
-    await navigator.clipboard.writeText(url)
-    toast({
-      title: 'Link copiado! 📋',
-      description: 'Envie o link para testers instalarem em seus celulares.',
-    })
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Área de transferência não suportada.')
+      }
+      await navigator.clipboard.writeText(url)
+      toast({
+        title: 'Link copiado! 📋',
+        description: 'Envie o link para testers instalarem em seus celulares.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao copiar link',
+        description: err?.message || 'Não foi possível copiar o link para a área de transferência.',
+        variant: 'destructive',
+      })
+    }
   }
 
   const modulesList: { key: ModuleKey; label: string; desc: string; color: string }[] = [
@@ -461,7 +509,9 @@ export default function MaisPage() {
 
       {/* SOBRE / PWA INFORMAÇÕES */}
       <div className="text-center text-xs text-muted-foreground space-y-1 pt-2">
-        <p className="font-semibold text-foreground">Rotina v1.0.0 • Mobile-first SPA Offline</p>
+        <p className="font-semibold text-foreground">
+          Rotina v{APP_VERSION} • Mobile-first SPA Offline
+        </p>
         <p>Feito para celular e tablet com armazenamento 100% local no seu aparelho.</p>
       </div>
 
