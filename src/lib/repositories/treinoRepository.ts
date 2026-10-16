@@ -5,34 +5,70 @@ export const treinoRepository = {
   // Planos semanais (0=Dom, 1=Seg... 6=Sab)
   async getWeeklyPlans(): Promise<TreinoPlanoSemanal[]> {
     const list = await idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO)
-    return list.sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+    return (list || []).sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek))
   },
 
   async getPlanByDayOfWeek(dayOfWeek: number): Promise<TreinoPlanoSemanal | undefined> {
-    const db = await idb.getDB()
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(idb.STORE_TREINO_PLANO, 'readonly')
-      const store = tx.objectStore(idb.STORE_TREINO_PLANO)
-      const index = store.index('dayOfWeek')
-      const request = index.get(dayOfWeek)
-      request.onsuccess = () => resolve(request.result as TreinoPlanoSemanal | undefined)
-      request.onerror = () => reject(request.error)
-    })
+    const targetDay = Number(dayOfWeek)
+    try {
+      // Busca através da lista completa (máx. 7 registros), garantindo resiliência
+      // contra inconsistências de tipos (string vs number) e evitando DOMExceptions caso o índice falhe
+      const all = await this.getWeeklyPlans()
+      return all.find((p) => Number(p.dayOfWeek) === targetDay)
+    } catch (err) {
+      console.warn('Erro ao carregar plano de treino por dia da semana:', err)
+      return undefined
+    }
   },
 
   async savePlan(
     plan: Omit<TreinoPlanoSemanal, 'id' | 'created' | 'updated'> & { id?: string },
   ): Promise<TreinoPlanoSemanal> {
-    const existing = await this.getPlanByDayOfWeek(plan.dayOfWeek)
+    const targetDay = Number(plan.dayOfWeek)
+    const all = await this.getWeeklyPlans()
+    const existing = all.find((p) => Number(p.dayOfWeek) === targetDay)
     const now = new Date().toISOString()
+
+    // Determinamos o ID resolvido:
+    // Se já existe um plano para este dia da semana no IndexedDB, DEVEMOS usar existing.id
+    // para atualizar o registro in-place. Se usássemos um novo ID (ou plan.id diferente),
+    // a store do IndexedDB tentaria uma inserção que colide com a restrição única
+    // do índice 'dayOfWeek', lançando DOMException: ConstraintError ("Erro ao salvar").
+    const resolvedId = existing
+      ? existing.id
+      : plan.id ||
+        (typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `plan_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+
+    // Se plan.id foi fornecido explicitamente mas for diferente de existing.id, removemos o registro residual com plan.id
+    if (plan.id && existing && plan.id !== existing.id) {
+      try {
+        await idb.delete(idb.STORE_TREINO_PLANO, plan.id)
+      } catch {
+        // ignora se não existir
+      }
+    }
+
+    // Se por acaso houvesse registros duplicados históricos para o mesmo dayOfWeek, limpa os extras
+    const duplicates = all.filter((p) => Number(p.dayOfWeek) === targetDay && p.id !== resolvedId)
+    for (const dup of duplicates) {
+      try {
+        await idb.delete(idb.STORE_TREINO_PLANO, dup.id)
+      } catch {
+        // ignora
+      }
+    }
+
     const saved: TreinoPlanoSemanal = {
-      id: plan.id || (existing ? existing.id : crypto.randomUUID()),
-      dayOfWeek: plan.dayOfWeek,
+      id: resolvedId,
+      dayOfWeek: targetDay,
       workoutName: plan.workoutName.trim(),
       exercises: plan.exercises,
       created: existing ? existing.created : now,
       updated: now,
     }
+
     await idb.put(idb.STORE_TREINO_PLANO, saved)
     return saved
   },

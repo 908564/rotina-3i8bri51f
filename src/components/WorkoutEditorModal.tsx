@@ -44,20 +44,55 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
   const { toast } = useToast()
 
   useEffect(() => {
-    if (existingPlan) {
-      setWorkoutName(existingPlan.workoutName)
-      setExercises(existingPlan.exercises || [])
-    } else {
-      setWorkoutName(`${DAYS_NAMES[dayOfWeek]} — Novo Treino`)
-      setExercises([
-        {
-          id: crypto.randomUUID(),
-          nome: '',
-          series: 3,
-          repeticoes: '10-12',
-          carga: 20,
-        },
-      ])
+    if (!open) return
+
+    let cancelled = false
+    async function loadEffectivePlan() {
+      if (existingPlan) {
+        setWorkoutName(existingPlan.workoutName || '')
+        setExercises(existingPlan.exercises ? [...existingPlan.exercises] : [])
+        return
+      }
+
+      // Se existingPlan não foi passado (ou ainda não carregou), consulta o banco
+      try {
+        const found = await treinoRepository.getPlanByDayOfWeek(dayOfWeek)
+        if (cancelled) return
+        if (found) {
+          setWorkoutName(found.workoutName || '')
+          setExercises(found.exercises ? [...found.exercises] : [])
+        } else {
+          setWorkoutName(`${DAYS_NAMES[dayOfWeek]} — Novo Treino`)
+          setExercises([
+            {
+              id: crypto.randomUUID(),
+              nome: '',
+              series: 3,
+              repeticoes: '10-12',
+              carga: 20,
+            },
+          ])
+        }
+      } catch {
+        if (!cancelled) {
+          setWorkoutName(`${DAYS_NAMES[dayOfWeek]} — Novo Treino`)
+          setExercises([
+            {
+              id: crypto.randomUUID(),
+              nome: '',
+              series: 3,
+              repeticoes: '10-12',
+              carga: 20,
+            },
+          ])
+        }
+      }
+    }
+
+    loadEffectivePlan()
+
+    return () => {
+      cancelled = true
     }
   }, [existingPlan, dayOfWeek, open])
 
@@ -128,7 +163,7 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
     try {
       await treinoRepository.savePlan({
         id: existingPlan?.id,
-        dayOfWeek,
+        dayOfWeek: Number(dayOfWeek),
         workoutName: workoutName.trim(),
         exercises: validExercises,
       })
@@ -138,9 +173,14 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
       })
       onSaved()
       onClose()
-    } catch {
+    } catch (err) {
+      console.error('Falha ao salvar plano de treino:', err)
       toast({
         title: 'Erro ao salvar',
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : 'Não foi possível salvar o treino localmente.',
         variant: 'destructive',
       })
     } finally {

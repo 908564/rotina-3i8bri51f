@@ -31,14 +31,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { QuickAddPagesModal } from '@/components/QuickAddPagesModal'
+import { WorkoutEditorModal } from '@/components/WorkoutEditorModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { getTodayDateKey } from '@/lib/dateUtils'
+import { getTodayDateKey, getLocalDayOfWeek } from '@/lib/dateUtils'
 
 export default function Index() {
   const { settings, updateSettings, loadSamples, dataVersion, notifyDataChanged } = useApp()
   const [overview, setOverview] = useState<TodayOverview | null>(null)
   const [loading, setLoading] = useState(true)
+  const [workoutEditorOpen, setWorkoutEditorOpen] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [readingDetailOpen, setReadingDetailOpen] = useState(false)
   const [selectBookForGoalOpen, setSelectBookForGoalOpen] = useState(false)
@@ -313,14 +315,24 @@ export default function Index() {
                     <Coffee className="w-4 h-4 text-[#F07B6A]" />
                     <span>Dia de descanso 🎉 Aproveite para recuperar energia!</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate('/treino')}
-                    className="text-xs h-8 text-[#F07B6A] hover:bg-[#F07B6A]/10"
-                  >
-                    Ver semana
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWorkoutEditorOpen(true)}
+                      className="text-xs h-8 text-[#F07B6A] hover:bg-[#F07B6A]/10 font-semibold"
+                    >
+                      Editar treino
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate('/treino')}
+                      className="text-xs h-8 text-muted-foreground hover:bg-muted"
+                    >
+                      Ver semana
+                    </Button>
+                  </div>
                 </div>
               ) : overview.workout.isCompleted ? (
                 <div className="rounded-xl bg-[#3D9C73]/10 p-3.5 flex items-center justify-between">
@@ -362,13 +374,24 @@ export default function Index() {
                     className="h-2 bg-muted [&>div]:bg-[#F07B6A] rounded-full"
                   />
 
-                  <Button
-                    onClick={() => navigate('/treino')}
-                    className="w-full min-h-[44px] rounded-xl bg-[#F07B6A] hover:bg-[#F07B6A]/90 text-white font-semibold text-sm shadow-sm active:scale-98 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Dumbbell className="w-4 h-4" />
-                    Registrar treino
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => navigate('/treino')}
+                      className="flex-1 min-h-[44px] rounded-xl bg-[#F07B6A] hover:bg-[#F07B6A]/90 text-white font-semibold text-sm shadow-sm active:scale-98 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Dumbbell className="w-4 h-4" />
+                      Registrar treino
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setWorkoutEditorOpen(true)}
+                      className="min-h-[44px] px-3.5 rounded-xl border-border hover:bg-muted text-xs font-semibold"
+                      aria-label="Editar exercícios do treino de hoje"
+                    >
+                      Editar treino
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -848,6 +871,18 @@ export default function Index() {
       <QuickAddPagesModal
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
+        onSaved={() => {
+          loadData()
+          notifyDataChanged()
+        }}
+      />
+
+      {/* MODAL DE EDIÇÃO DO TREINO DE HOJE (ABERTO VIA HOJE/INDEX) */}
+      <WorkoutEditorModal
+        open={workoutEditorOpen}
+        onClose={() => setWorkoutEditorOpen(false)}
+        dayOfWeek={overview?.dayOfWeek ?? getLocalDayOfWeek()}
+        existingPlan={overview?.workout.plan}
         onSaved={() => {
           loadData()
           notifyDataChanged()
