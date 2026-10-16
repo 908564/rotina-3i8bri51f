@@ -13,6 +13,10 @@ import {
   StudyCertificate,
   StudySession,
   StudyGoal,
+  Project,
+  Achievement,
+  Experience,
+  WorkNote,
 } from '../types'
 
 export const backupRepository = {
@@ -29,9 +33,13 @@ export const backupRepository = {
     const study_certificates = await idb.getAll<StudyCertificate>(idb.STORE_STUDY_CERTIFICATES)
     const study_sessions = await idb.getAll<StudySession>(idb.STORE_STUDY_SESSIONS)
     const study_goals = await idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS)
+    const projects = await idb.getAll<Project>(idb.STORE_PROJECTS)
+    const achievements = await idb.getAll<Achievement>(idb.STORE_ACHIEVEMENTS)
+    const experiences = await idb.getAll<Experience>(idb.STORE_EXPERIENCES)
+    const work_notes = await idb.getAll<WorkNote>(idb.STORE_WORK_NOTES)
 
     return {
-      schemaVersion: 3,
+      schemaVersion: 4,
       appName: 'Rotina',
       exportedAt: new Date().toISOString(),
       settings,
@@ -47,6 +55,10 @@ export const backupRepository = {
         study_certificates,
         study_sessions,
         study_goals,
+        projects,
+        achievements,
+        experiences,
+        work_notes,
       },
     }
   },
@@ -95,8 +107,12 @@ export const backupRepository = {
       await idb.clear(idb.STORE_STUDY_CERTIFICATES)
       await idb.clear(idb.STORE_STUDY_SESSIONS)
       await idb.clear(idb.STORE_STUDY_GOALS)
+      await idb.clear(idb.STORE_PROJECTS)
+      await idb.clear(idb.STORE_ACHIEVEMENTS)
+      await idb.clear(idb.STORE_EXPERIENCES)
+      await idb.clear(idb.STORE_WORK_NOTES)
 
-      // Grava dados das coleções migrando livros antigos (schemaVersion 1 -> 2 -> 3)
+      // Grava dados das coleções migrando livros antigos (schemaVersion 1 -> 2 -> 3 -> 4)
       for (const item of valid.collections.escrita_notes) {
         await idb.put(idb.STORE_ESCRITA, item)
       }
@@ -149,6 +165,28 @@ export const backupRepository = {
         }
       }
 
+      // Restaura coleções de trabalho se presentes (v4) ou ignora compatível com v1/v2/v3
+      if (Array.isArray(valid.collections.projects)) {
+        for (const item of valid.collections.projects) {
+          await idb.put(idb.STORE_PROJECTS, item)
+        }
+      }
+      if (Array.isArray(valid.collections.achievements)) {
+        for (const item of valid.collections.achievements) {
+          await idb.put(idb.STORE_ACHIEVEMENTS, item)
+        }
+      }
+      if (Array.isArray(valid.collections.experiences)) {
+        for (const item of valid.collections.experiences) {
+          await idb.put(idb.STORE_EXPERIENCES, item)
+        }
+      }
+      if (Array.isArray(valid.collections.work_notes)) {
+        for (const item of valid.collections.work_notes) {
+          await idb.put(idb.STORE_WORK_NOTES, item)
+        }
+      }
+
       // Restaura configurações se existirem
       if (valid.settings) {
         settingsRepository.saveSettings(valid.settings)
@@ -167,6 +205,10 @@ export const backupRepository = {
         await idb.clear(idb.STORE_STUDY_CERTIFICATES)
         await idb.clear(idb.STORE_STUDY_SESSIONS)
         await idb.clear(idb.STORE_STUDY_GOALS)
+        await idb.clear(idb.STORE_PROJECTS)
+        await idb.clear(idb.STORE_ACHIEVEMENTS)
+        await idb.clear(idb.STORE_EXPERIENCES)
+        await idb.clear(idb.STORE_WORK_NOTES)
 
         for (const item of previousSnapshot.collections.escrita_notes)
           await idb.put(idb.STORE_ESCRITA, item)
@@ -200,6 +242,22 @@ export const backupRepository = {
           for (const item of previousSnapshot.collections.study_goals)
             await idb.put(idb.STORE_STUDY_GOALS, item)
         }
+        if (previousSnapshot.collections.projects) {
+          for (const item of previousSnapshot.collections.projects)
+            await idb.put(idb.STORE_PROJECTS, item)
+        }
+        if (previousSnapshot.collections.achievements) {
+          for (const item of previousSnapshot.collections.achievements)
+            await idb.put(idb.STORE_ACHIEVEMENTS, item)
+        }
+        if (previousSnapshot.collections.experiences) {
+          for (const item of previousSnapshot.collections.experiences)
+            await idb.put(idb.STORE_EXPERIENCES, item)
+        }
+        if (previousSnapshot.collections.work_notes) {
+          for (const item of previousSnapshot.collections.work_notes)
+            await idb.put(idb.STORE_WORK_NOTES, item)
+        }
         settingsRepository.saveSettings(previousSnapshot.settings)
       } catch {
         // Rollback secundário falhou
@@ -220,6 +278,10 @@ export const backupRepository = {
     await idb.clear(idb.STORE_STUDY_CERTIFICATES)
     await idb.clear(idb.STORE_STUDY_SESSIONS)
     await idb.clear(idb.STORE_STUDY_GOALS)
+    await idb.clear(idb.STORE_PROJECTS)
+    await idb.clear(idb.STORE_ACHIEVEMENTS)
+    await idb.clear(idb.STORE_EXPERIENCES)
+    await idb.clear(idb.STORE_WORK_NOTES)
 
     // Reseta configurações básicas preservando tema
     const current = settingsRepository.getSettings()

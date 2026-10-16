@@ -3,7 +3,7 @@
  * Todos os registros possuem id (UUID), created (ISO) e updated (ISO).
  */
 
-export type ModuleKey = 'escrita' | 'leitura' | 'treino' | 'estudos'
+export type ModuleKey = 'escrita' | 'leitura' | 'treino' | 'estudos' | 'trabalho'
 
 export interface AppSettings {
   theme: 'claro' | 'escuro' | 'sistema'
@@ -261,6 +261,77 @@ export interface CourseGoalProgress {
 }
 
 // ========================
+// 5) TRABALHO
+// ========================
+export type ProjectStatus = 'planejado' | 'em_andamento' | 'concluido' | 'pausado'
+
+export interface ProjectTask {
+  id: string
+  title: string
+  completed: boolean
+}
+
+export interface ProjectNote {
+  id: string
+  date: string // YYYY-MM-DD
+  text: string
+  created: string
+  updated: string
+}
+
+export interface Project {
+  id: string
+  name: string
+  description: string
+  objective?: string
+  status: ProjectStatus
+  startDate?: string // YYYY-MM-DD
+  endDate?: string // YYYY-MM-DD
+  tags: string[] // competências/tags
+  tasks: ProjectTask[]
+  notes: ProjectNote[]
+  experienceId?: string // vínculo opcional com experiência
+  created: string
+  updated: string
+}
+
+export interface Achievement {
+  id: string
+  title: string
+  description: string
+  date: string // YYYY-MM-DD
+  impact: string // ex: "reduziu o tempo de implantação em 30%"
+  projectId?: string // vínculo opcional com projeto
+  experienceId?: string // vínculo opcional com experiência
+  tags: string[] // competências
+  created: string
+  updated: string
+}
+
+export interface Experience {
+  id: string
+  role: string // cargo
+  company: string // empresa
+  startDate: string // YYYY-MM
+  endDate?: string // YYYY-MM ou undefined se atual
+  isCurrent: boolean
+  description: string
+  skills: string[] // competências
+  created: string
+  updated: string
+}
+
+export interface WorkNote {
+  id: string
+  title: string
+  date: string // YYYY-MM-DD
+  body: string
+  tags: string[]
+  created: string
+  updated: string
+}
+
+// ========================
 // EXTENSIBILIDADE FUTURA (FASE 2 - PLACEHOLDERS)
 // ========================
 /*
@@ -305,5 +376,9 @@ export interface ExportDataPayload {
     study_certificates?: StudyCertificate[]
     study_sessions?: StudySession[]
     study_goals?: StudyGoal[]
+    projects?: Project[]
+    achievements?: Achievement[]
+    experiences?: Experience[]
+    work_notes?: WorkNote[]
   }
 }

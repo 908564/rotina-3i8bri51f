@@ -10,7 +10,7 @@ import {
 } from './types'
 
 const DB_NAME = 'rotina_db'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 const STORE_ESCRITA = 'escrita_notes'
 const STORE_LIVROS = 'livros'
@@ -23,6 +23,10 @@ const STORE_STUDY_PAGES = 'study_pages'
 const STORE_STUDY_CERTIFICATES = 'study_certificates'
 const STORE_STUDY_SESSIONS = 'study_sessions'
 const STORE_STUDY_GOALS = 'study_goals'
+const STORE_PROJECTS = 'projects'
+const STORE_ACHIEVEMENTS = 'achievements'
+const STORE_EXPERIENCES = 'experiences'
+const STORE_WORK_NOTES = 'work_notes'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -89,6 +93,28 @@ function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_STUDY_GOALS)) {
         const store = db.createObjectStore(STORE_STUDY_GOALS, { keyPath: 'id' })
         store.createIndex('courseId', 'courseId', { unique: true })
+      }
+
+      // v3: TRABALHO
+      if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
+        const store = db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' })
+        store.createIndex('status', 'status', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_ACHIEVEMENTS)) {
+        const store = db.createObjectStore(STORE_ACHIEVEMENTS, { keyPath: 'id' })
+        store.createIndex('date', 'date', { unique: false })
+        store.createIndex('projectId', 'projectId', { unique: false })
+        store.createIndex('experienceId', 'experienceId', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_EXPERIENCES)) {
+        db.createObjectStore(STORE_EXPERIENCES, { keyPath: 'id' })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_WORK_NOTES)) {
+        const store = db.createObjectStore(STORE_WORK_NOTES, { keyPath: 'id' })
+        store.createIndex('date', 'date', { unique: false })
       }
     }
 
@@ -167,6 +193,10 @@ export const idb = {
   STORE_STUDY_CERTIFICATES,
   STORE_STUDY_SESSIONS,
   STORE_STUDY_GOALS,
+  STORE_PROJECTS,
+  STORE_ACHIEVEMENTS,
+  STORE_EXPERIENCES,
+  STORE_WORK_NOTES,
   getAll: getAllFromStore,
   get: getFromStore,
   put: putInStore,

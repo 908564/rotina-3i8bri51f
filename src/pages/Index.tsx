@@ -17,6 +17,9 @@ import {
   Clock,
   BookMarked,
   ArrowRight,
+  Briefcase,
+  Circle,
+  FolderKanban,
 } from 'lucide-react'
 import { Course } from '@/lib/types'
 import { estudosRepository } from '@/lib/repositories/estudosRepository'
@@ -602,6 +605,127 @@ export default function Index() {
                   >
                     Escrever agora
                   </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* CARD TRABALHO (somente se o módulo estiver ativo) */}
+        {activeModules.trabalho && overview?.work && (
+          <Card className="rounded-2xl border-border shadow-subtle overflow-hidden transition-all hover:border-[#0284C7]/40">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div
+                  className="flex items-center gap-2.5 cursor-pointer flex-1"
+                  onClick={() => navigate('/trabalho')}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-[#0284C7]/15 text-[#0284C7] flex items-center justify-center shrink-0">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold leading-tight">Trabalho</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {overview.work.totalProjectsCount === 0
+                        ? 'Nenhum projeto cadastrado'
+                        : `${overview.work.inProgressCount} ${
+                            overview.work.inProgressCount === 1
+                              ? 'projeto em andamento'
+                              : 'projetos em andamento'
+                          }`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-[#0284C7] bg-[#0284C7]/10 px-2.5 py-1 rounded-full">
+                    {overview.work.inProgressCount} ativos
+                  </span>
+                </div>
+              </div>
+
+              {overview.work.totalProjectsCount === 0 ? (
+                /* Convite para criar o primeiro projeto */
+                <div className="rounded-xl bg-muted/30 border border-dashed border-border/80 p-4 text-center space-y-2.5">
+                  <p className="text-xs text-muted-foreground">
+                    Você ainda não cadastrou nenhum projeto ou conquista profissional.
+                  </p>
+                  <Button
+                    onClick={() => navigate('/trabalho?new=project')}
+                    className="h-9 rounded-xl bg-[#0284C7] hover:bg-[#0284C7]/90 text-white text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Criar primeiro projeto
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Projetos em andamento com tarefas pendentes */}
+                  {overview.work.inProgressProjects.length > 0 ? (
+                    <div className="space-y-2">
+                      {overview.work.inProgressProjects.map((item) => (
+                        <div
+                          key={item.project.id}
+                          onClick={() => navigate(`/trabalho?project=${item.project.id}`)}
+                          className="p-3 rounded-xl bg-muted/30 border border-border/70 hover:border-[#0284C7]/50 hover:bg-muted/60 transition-colors cursor-pointer space-y-2"
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-foreground line-clamp-1">
+                              {item.project.name}
+                            </span>
+                            <span className="text-[11px] text-[#0284C7] font-semibold whitespace-nowrap">
+                              {item.pendingTasks.length}{' '}
+                              {item.pendingTasks.length === 1 ? 'pendente' : 'pendentes'}
+                            </span>
+                          </div>
+
+                          {/* Se houver tarefas pendentes, exibe até 2 */}
+                          {item.pendingTasks.length > 0 ? (
+                            <div className="space-y-1 pt-0.5">
+                              {item.pendingTasks.slice(0, 2).map((t) => (
+                                <div
+                                  key={t.id}
+                                  className="flex items-center gap-2 text-xs text-muted-foreground"
+                                >
+                                  <Circle className="w-3 h-3 text-muted-foreground shrink-0" />
+                                  <span className="line-clamp-1">{t.title}</span>
+                                </div>
+                              ))}
+                              {item.pendingTasks.length > 2 && (
+                                <span className="text-[10px] text-muted-foreground pl-5 block">
+                                  +{item.pendingTasks.length - 2} outras tarefas...
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[#3D9C73] font-medium flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Todas as tarefas concluídas
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-muted/20 border border-border text-center text-xs text-muted-foreground">
+                      Nenhum projeto em andamento no momento.
+                    </div>
+                  )}
+
+                  {/* Atalhos rápidos de ação: + Nova anotação de trabalho e + Registrar conquista */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/trabalho?new=note')}
+                      className="min-h-[44px] h-10 px-2 rounded-xl text-xs font-semibold border-border hover:border-[#0284C7] hover:text-[#0284C7] justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#0284C7]" /> Nova anotação
+                    </Button>
+                    <Button
+                      onClick={() => navigate('/trabalho?new=achievement')}
+                      className="min-h-[44px] h-10 px-2 rounded-xl bg-[#0284C7] hover:bg-[#0284C7]/90 text-white font-semibold text-xs justify-center gap-1.5 shadow-sm"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Registrar conquista
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

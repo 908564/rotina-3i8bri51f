@@ -11,6 +11,10 @@ import {
   StudyCertificate,
   StudySession,
   StudyGoal,
+  Project,
+  Achievement,
+  Experience,
+  WorkNote,
 } from '../types'
 
 // Função auxiliar para subtrair dias de hoje no formato YYYY-MM-DD
@@ -36,6 +40,10 @@ export async function loadSampleData(): Promise<void> {
   await idb.clear(idb.STORE_STUDY_CERTIFICATES)
   await idb.clear(idb.STORE_STUDY_SESSIONS)
   await idb.clear(idb.STORE_STUDY_GOALS)
+  await idb.clear(idb.STORE_PROJECTS)
+  await idb.clear(idb.STORE_ACHIEVEMENTS)
+  await idb.clear(idb.STORE_EXPERIENCES)
+  await idb.clear(idb.STORE_WORK_NOTES)
 
   // 2. Plano Semanal de Treino
   // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
@@ -786,6 +794,228 @@ export async function loadSampleData(): Promise<void> {
     localStorage.setItem('rotina_last_course_time', course1Id)
   } catch {
     // Ignora
+  }
+
+  // ========================
+  // 6. DADOS DE EXEMPLO DO MÓDULO TRABALHO
+  // 2 projetos, 3 conquistas, 2 experiências e algumas anotações
+  // ========================
+  const exp1Id = crypto.randomUUID()
+  const exp2Id = crypto.randomUUID()
+
+  const sampleExperiences: Experience[] = [
+    {
+      id: exp1Id,
+      role: 'Tech Lead / Arquiteto Frontend',
+      company: 'TechFlow Soluções Digitais',
+      startDate: '2023-03',
+      isCurrent: true,
+      description:
+        'Liderança técnica da equipe de produto web e mobile, responsável pela modernização do design system, arquitetura offline-first e melhoria contínua de performance e acessibilidade.',
+      skills: [
+        'React',
+        'TypeScript',
+        'Tailwind CSS',
+        'Arquitetura de Software',
+        'Liderança Técnica',
+      ],
+      created: nowIso,
+      updated: nowIso,
+    },
+    {
+      id: exp2Id,
+      role: 'Desenvolvedor Frontend Sênior',
+      company: 'Nexus Software Labs',
+      startDate: '2021-01',
+      endDate: '2023-02',
+      isCurrent: false,
+      description:
+        'Desenvolvimento de aplicações SPA de alta escalabilidade para o setor financeiro e logístico, integrando APIs GraphQL e REST com foco em robustez e cobertura de testes.',
+      skills: ['React', 'Next.js', 'TypeScript', 'GraphQL', 'Jest', 'CI/CD'],
+      created: nowIso,
+      updated: nowIso,
+    },
+  ]
+
+  for (const exp of sampleExperiences) {
+    await idb.put(idb.STORE_EXPERIENCES, exp)
+  }
+
+  const proj1Id = crypto.randomUUID()
+  const proj2Id = crypto.randomUUID()
+
+  const sampleProjects: Project[] = [
+    {
+      id: proj1Id,
+      name: 'Design System & Microfrontends',
+      description:
+        'Unificação visual e componentização dos sistemas legados da empresa em biblioteca compartilhada.',
+      objective:
+        'Reduzir duplicidade de código entre squads e acelerar entrega de novas telas em 40%.',
+      status: 'em_andamento',
+      startDate: daysAgo(45),
+      endDate: daysAgo(-45),
+      tags: ['Design System', 'React', 'Storybook', 'Acessibilidade'],
+      experienceId: exp1Id,
+      tasks: [
+        { id: crypto.randomUUID(), title: 'Mapear tokens de cor e tipografia', completed: true },
+        {
+          id: crypto.randomUUID(),
+          title: 'Publicar componentes base no Storybook',
+          completed: true,
+        },
+        {
+          id: crypto.randomUUID(),
+          title: 'Testar compatibilidade com leitores de tela',
+          completed: false,
+        },
+        {
+          id: crypto.randomUUID(),
+          title: 'Implementar pacote NPM interno com rollup',
+          completed: false,
+        },
+      ],
+      notes: [
+        {
+          id: crypto.randomUUID(),
+          date: daysAgo(3),
+          text: 'Alinhamento com o time de UX sobre os estados hover/active dos botões e contraste WCAG AA.',
+          created: nowIso,
+          updated: nowIso,
+        },
+        {
+          id: crypto.randomUUID(),
+          date: daysAgo(12),
+          text: 'Definido suporte a tema claro e escuro utilizando CSS custom properties e Tailwind tokens.',
+          created: nowIso,
+          updated: nowIso,
+        },
+      ],
+      created: nowIso,
+      updated: nowIso,
+    },
+    {
+      id: proj2Id,
+      name: 'Otimização de Performance e Bundle Size',
+      description:
+        'Análise de chunks, lazy-loading e reestruturação de dependências pesadas na aplicação core.',
+      objective: 'Atingir score de Core Web Vitals acima de 90 e LCP inferior a 1.8s.',
+      status: 'concluido',
+      startDate: daysAgo(90),
+      endDate: daysAgo(10),
+      tags: ['Performance', 'Vite', 'Core Web Vitals', 'Code Splitting'],
+      experienceId: exp2Id,
+      tasks: [
+        {
+          id: crypto.randomUUID(),
+          title: 'Diagnóstico de pacotes pesados com rollup-visualizer',
+          completed: true,
+        },
+        {
+          id: crypto.randomUUID(),
+          title: 'Substituição de bibliotecas de data por date-fns leve',
+          completed: true,
+        },
+        {
+          id: crypto.randomUUID(),
+          title: 'Configurar dynamic imports nas rotas secundárias',
+          completed: true,
+        },
+        {
+          id: crypto.randomUUID(),
+          title: 'Validação no Google Lighthouse e PageSpeed',
+          completed: true,
+        },
+      ],
+      notes: [
+        {
+          id: crypto.randomUUID(),
+          date: daysAgo(15),
+          text: 'Bundle principal reduzido de 1.4MB para 420KB após tree-shaking das dependências.',
+          created: nowIso,
+          updated: nowIso,
+        },
+      ],
+      created: nowIso,
+      updated: nowIso,
+    },
+  ]
+
+  for (const proj of sampleProjects) {
+    await idb.put(idb.STORE_PROJECTS, proj)
+  }
+
+  const sampleAchievements: Achievement[] = [
+    {
+      id: crypto.randomUUID(),
+      title: 'Redução do tempo de carregamento inicial em 65%',
+      description:
+        'Liderei a refatoração do pipeline de build e divisão de código em módulos lazy-loaded.',
+      date: daysAgo(20),
+      impact:
+        'reduziu o tempo de carregamento de 4.2s para 1.4s e elevou a retenção de usuários em 18%',
+      projectId: proj2Id,
+      experienceId: exp2Id,
+      tags: ['Performance Web', 'Otimização', 'React', 'Métricas de Negócio'],
+      created: nowIso,
+      updated: nowIso,
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'Implantação de CI/CD automatizado com testes de regressão',
+      description:
+        'Estruturei pipelines de build, verificação de tipagem e testes unitários automatizados no GitHub Actions.',
+      date: daysAgo(50),
+      impact:
+        'reduziu o tempo de implantação em 30% e zerou incidentes críticos em produção por 6 meses',
+      projectId: proj1Id,
+      experienceId: exp1Id,
+      tags: ['DevOps', 'CI/CD', 'Qualidade de Software', 'GitHub Actions'],
+      created: nowIso,
+      updated: nowIso,
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'Padronização do Design System com 35+ componentes reutilizáveis',
+      description:
+        'Criei uma biblioteca de componentes de UI acessíveis e altamente tipados para 4 times simultâneos.',
+      date: daysAgo(8),
+      impact: 'acelerou o tempo de desenvolvimento de novas features em 40% em todos os squads',
+      projectId: proj1Id,
+      experienceId: exp1Id,
+      tags: ['Design System', 'TypeScript', 'Acessibilidade', 'Produtividade'],
+      created: nowIso,
+      updated: nowIso,
+    },
+  ]
+
+  for (const ach of sampleAchievements) {
+    await idb.put(idb.STORE_ACHIEVEMENTS, ach)
+  }
+
+  const sampleWorkNotes: WorkNote[] = [
+    {
+      id: crypto.randomUUID(),
+      title: 'Ideias para o 1:1 de alinhamento com a diretoria de produto',
+      date: today,
+      body: 'Pontos a apresentar: status da adoção do Design System, métricas de performance alcançadas no último trimestre e proposta de capacitação interna em testes E2E.',
+      tags: ['Gestão', '1:1', 'Estratégia'],
+      created: nowIso,
+      updated: nowIso,
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'Checklist para lançamento de release v2.4',
+      date: daysAgo(4),
+      body: '1. Verificar migrations de banco\n2. Rodar suite de regressão em homologação\n3. Validar changelog e notas de versão para clientes\n4. Monitoramento com telemetria ativa nas primeiras 2h.',
+      tags: ['Deploy', 'Release', 'Qualidade'],
+      created: nowIso,
+      updated: nowIso,
+    },
+  ]
+
+  for (const wn of sampleWorkNotes) {
+    await idb.put(idb.STORE_WORK_NOTES, wn)
   }
 
   // Atualiza configurações para marcar que o onboarding foi concluído

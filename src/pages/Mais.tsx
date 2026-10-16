@@ -246,6 +246,12 @@ export default function MaisPage() {
       desc: 'Cursos, faculdade, certificações, anotações em blocos e certificados.',
       color: '#8B5CF6',
     },
+    {
+      key: 'trabalho',
+      label: 'Trabalho',
+      desc: 'Projetos, conquistas para currículo/LinkedIn, experiências e anotações.',
+      color: '#0284C7',
+    },
   ]
 
   return (

@@ -1,6 +1,14 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, PenLine, BookOpen, Dumbbell, GraduationCap, MoreHorizontal } from 'lucide-react'
+import {
+  Home,
+  PenLine,
+  BookOpen,
+  Dumbbell,
+  GraduationCap,
+  Briefcase,
+  MoreHorizontal,
+} from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +65,14 @@ export const BottomNav: React.FC = () => {
       colorClass: 'text-[#8B5CF6]',
       pillBg: 'bg-[#8B5CF6]/15 text-[#8B5CF6]',
       moduleKey: 'estudos',
+    },
+    {
+      to: '/trabalho',
+      label: 'Trabalho',
+      icon: Briefcase,
+      colorClass: 'text-[#0284C7]',
+      pillBg: 'bg-[#0284C7]/15 text-[#0284C7]',
+      moduleKey: 'trabalho',
     },
     {
       to: '/mais',

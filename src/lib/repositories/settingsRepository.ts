@@ -9,6 +9,7 @@ export const defaultSettings: AppSettings = {
     leitura: true,
     treino: true,
     estudos: true,
+    trabalho: true,
   },
   hasSeenOnboarding: false,
   userName: '',

@@ -2,6 +2,7 @@ import { escritaRepository } from './escritaRepository'
 import { leituraRepository } from './leituraRepository'
 import { treinoRepository } from './treinoRepository'
 import { estudosRepository } from './estudosRepository'
+import { trabalhoRepository } from './trabalhoRepository'
 import { settingsRepository } from './settingsRepository'
 import {
   EscritaNote,
@@ -10,6 +11,8 @@ import {
   ReadingGoalsProgress,
   Livro,
   Course,
+  Project,
+  ProjectTask,
 } from '../types'
 
 export interface TodayOverview {
@@ -38,6 +41,16 @@ export interface TodayOverview {
     weekMinutes: number
     lastCourse?: Course
     lastPage?: { pageId: string; courseId: string; title: string }
+  }
+  work?: {
+    totalProjectsCount: number
+    inProgressCount: number
+    inProgressProjects: {
+      project: Project
+      pendingTasks: ProjectTask[]
+      completedCount: number
+      totalTasks: number
+    }[]
   }
 }
 
@@ -75,7 +88,10 @@ export const hojeRepository = {
     // 4) Estudos
     const studyOverview = await estudosRepository.getTodayStudyOverview()
 
-    // 5) Progresso geral do dia
+    // 5) Trabalho
+    const workOverview = await trabalhoRepository.getTodayWorkOverview()
+
+    // 6) Progresso geral do dia
     // Combina leitura diária (hoje / 20) e treino de hoje (completas / planejadas)
     let componentsCount = 0
     let totalScore = 0
@@ -147,6 +163,7 @@ export const hojeRepository = {
         todayNote,
       },
       study: studyOverview,
+      work: workOverview,
     }
   },
 }
