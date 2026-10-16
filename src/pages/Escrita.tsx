@@ -18,21 +18,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { CalendarModal } from '@/components/CalendarModal'
 import { cn } from '@/lib/utils'
+import {
+  getTodayDateKey,
+  formatDateDisplay,
+  addDaysToDateKey,
+  subDaysFromDateKey,
+} from '@/lib/dateUtils'
 
-// Gerar string YYYY-MM-DD
 function getTodayDateStr(): string {
-  return new Date().toISOString().split('T')[0]
-}
-
-function formatDateDisplay(dateStr: string): string {
-  const parts = dateStr.split('-')
-  const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
-  const formatter = new Intl.DateTimeFormat('pt-BR', {
-    day: 'numeric',
-    month: 'long',
-    weekday: 'short',
-  })
-  return formatter.format(date)
+  return getTodayDateKey()
 }
 
 export default function EscritaPage() {
@@ -177,17 +171,11 @@ export default function EscritaPage() {
 
   // Navegação de dias
   const handlePrevDay = () => {
-    const parts = currentDate.split('-')
-    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
-    d.setDate(d.getDate() - 1)
-    setCurrentDate(d.toISOString().split('T')[0])
+    setCurrentDate(subDaysFromDateKey(currentDate, 1))
   }
 
   const handleNextDay = () => {
-    const parts = currentDate.split('-')
-    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
-    d.setDate(d.getDate() + 1)
-    setCurrentDate(d.toISOString().split('T')[0])
+    setCurrentDate(addDaysToDateKey(currentDate, 1))
   }
 
   // Busca instantânea

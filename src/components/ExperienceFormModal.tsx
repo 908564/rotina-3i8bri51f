@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { X, Plus, Briefcase } from 'lucide-react'
+import { getLocalMonthKey } from '@/lib/dateUtils'
 
 interface ExperienceFormModalProps {
   open: boolean
@@ -58,7 +59,7 @@ export const ExperienceFormModal: React.FC<ExperienceFormModalProps> = ({
     } else {
       setRole('')
       setCompany('')
-      setStartDate(new Date().toISOString().slice(0, 7)) // YYYY-MM
+      setStartDate(getLocalMonthKey()) // YYYY-MM no fuso local
       setEndDate('')
       setIsCurrent(true)
       setDescription('')

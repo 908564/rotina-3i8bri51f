@@ -33,6 +33,7 @@ import { Progress } from '@/components/ui/progress'
 import { QuickAddPagesModal } from '@/components/QuickAddPagesModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { getTodayDateKey } from '@/lib/dateUtils'
 
 export default function Index() {
   const { settings, updateSettings, loadSamples, dataVersion, notifyDataChanged } = useApp()
@@ -162,7 +163,7 @@ export default function Index() {
 
     setSavingQuickStudy(true)
     try {
-      const todayStr = new Date().toISOString().split('T')[0]
+      const todayStr = getTodayDateKey()
       await estudosRepository.saveSession({
         courseId: selectedStudyCourseId,
         date: todayStr,

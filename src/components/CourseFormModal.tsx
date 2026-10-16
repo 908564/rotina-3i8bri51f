@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Course, CourseType, CourseStatus } from '@/lib/types'
+import { getTodayDateKey } from '@/lib/dateUtils'
 import {
   GraduationCap,
   Award,
@@ -88,7 +89,7 @@ export const CourseFormModal: React.FC<CourseFormModalProps> = ({
       setStatus('em_andamento')
       setProgress('0')
       setWorkloadHours('')
-      setStartDate(new Date().toISOString().split('T')[0])
+      setStartDate(getTodayDateKey())
       setEndDate('')
       setCourseUrl('')
       setColor('#8B5CF6')

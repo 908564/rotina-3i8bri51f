@@ -18,6 +18,7 @@ import { WorkoutEditorModal } from '@/components/WorkoutEditorModal'
 import { DayWorkoutLogView } from '@/components/DayWorkoutLogView'
 import { ExerciseEvolutionModal } from '@/components/ExerciseEvolutionModal'
 import { cn } from '@/lib/utils'
+import { getTodayDateKey, getLocalDayOfWeek } from '@/lib/dateUtils'
 
 const DAYS_OF_WEEK = [
   { dayIndex: 1, label: 'Seg', full: 'Segunda-feira' },
@@ -34,7 +35,7 @@ export default function TreinoPage() {
   const [plans, setPlans] = useState<TreinoPlanoSemanal[]>([])
   const [logs, setLogs] = useState<TreinoLog[]>([])
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(() => {
-    return new Date().getDay()
+    return getLocalDayOfWeek()
   })
 
   // Modais e visualizações
@@ -55,8 +56,8 @@ export default function TreinoPage() {
 
   const currentPlan = plans.find((p) => p.dayOfWeek === selectedDayOfWeek)
 
-  const todayStr = new Date().toISOString().split('T')[0]
-  const todayDayOfWeek = new Date().getDay()
+  const todayStr = getTodayDateKey()
+  const todayDayOfWeek = getLocalDayOfWeek()
   const isTodaySelected = selectedDayOfWeek === todayDayOfWeek
 
   // Verifica se o treino selecionado foi concluído hoje

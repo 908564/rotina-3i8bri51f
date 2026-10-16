@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Livro, LivroAnotacao, LeituraHistorico, LivroMeta } from '@/lib/types'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
+import { getTodayDateKey, getDaysAgoKey } from '@/lib/dateUtils'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -171,14 +172,9 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
     : 0
 
   // Progresso de hoje, semana e mês deste livro específico
-  const todayStr = new Date().toISOString().split('T')[0]
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0]
-
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
+  const todayStr = getTodayDateKey()
+  const sevenDaysAgoStr = getDaysAgoKey(6)
+  const thirtyDaysAgoStr = getDaysAgoKey(29)
 
   const todayEntries = historico.filter((h) => h.dateRead === todayStr)
   const weekEntries = historico.filter(

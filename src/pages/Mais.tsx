@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { backupRepository } from '@/lib/repositories/backupRepository'
+import { getTodayDateKey } from '@/lib/dateUtils'
 import { ModuleKey } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -104,7 +105,7 @@ export default function MaisPage() {
       const url = URL.createObjectURL(blob)
 
       const link = document.createElement('a')
-      const dateStr = new Date().toISOString().split('T')[0]
+      const dateStr = getTodayDateKey()
       link.href = url
       link.download = `rotina_backup_${dateStr}.json`
       document.body.appendChild(link)

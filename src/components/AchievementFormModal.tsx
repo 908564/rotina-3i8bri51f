@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { X, Plus, Sparkles } from 'lucide-react'
+import { getTodayDateKey } from '@/lib/dateUtils'
 
 interface AchievementFormModalProps {
   open: boolean
@@ -61,7 +62,7 @@ export const AchievementFormModal: React.FC<AchievementFormModalProps> = ({
     } else {
       setTitle('')
       setDescription('')
-      setDate(new Date().toISOString().split('T')[0])
+      setDate(getTodayDateKey())
       setImpact('')
       setProjectId('')
       setExperienceId('')

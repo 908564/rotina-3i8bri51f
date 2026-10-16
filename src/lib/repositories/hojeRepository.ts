@@ -4,6 +4,7 @@ import { treinoRepository } from './treinoRepository'
 import { estudosRepository } from './estudosRepository'
 import { trabalhoRepository } from './trabalhoRepository'
 import { settingsRepository } from './settingsRepository'
+import { getTodayDateKey, getLocalDayOfWeek } from '../dateUtils'
 import {
   EscritaNote,
   TreinoPlanoSemanal,
@@ -56,9 +57,8 @@ export interface TodayOverview {
 
 export const hojeRepository = {
   async getTodayOverview(): Promise<TodayOverview> {
-    const today = new Date()
-    const dateStr = today.toISOString().split('T')[0]
-    const dayOfWeek = today.getDay()
+    const dateStr = getTodayDateKey()
+    const dayOfWeek = getLocalDayOfWeek()
 
     // 1) Treino de hoje
     const plan = await treinoRepository.getPlanByDayOfWeek(dayOfWeek)

@@ -24,6 +24,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { getTodayDateKey } from '@/lib/dateUtils'
 
 interface StudyTimeTabProps {
   course: Course
@@ -42,7 +43,7 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
 
   // Modal de registrar sessão de tempo
   const [sessionModalOpen, setSessionModalOpen] = useState(false)
-  const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0])
+  const [sessionDate, setSessionDate] = useState(getTodayDateKey())
   const [sessionMinutes, setSessionMinutes] = useState('45')
   const [sessionNotes, setSessionNotes] = useState('')
   const [savingSession, setSavingSession] = useState(false)
@@ -55,7 +56,7 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
   const [savingGoal, setSavingGoal] = useState(false)
 
   const handleOpenAddSessionToday = () => {
-    setSessionDate(new Date().toISOString().split('T')[0])
+    setSessionDate(getTodayDateKey())
     setSessionMinutes('45')
     setSessionNotes('')
     setSessionModalOpen(true)

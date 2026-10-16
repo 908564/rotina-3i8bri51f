@@ -1,9 +1,10 @@
 import { idb } from '../indexedDb'
+import { getTodayDateKey, getDaysAgoKey } from '../dateUtils'
 import {
   Course,
-  StudyPage,
-  StudyCertificate,
-  StudySession,
+  CoursePage,
+  CourseCertificate,
+  StudyTimeSession,
   StudyGoal,
   StudyGoalHistory,
   CourseGoalProgress,
@@ -318,7 +319,7 @@ export const estudosRepository = {
 
   async saveCourseGoal(courseId: string, weeklyMinutes: number): Promise<StudyGoal> {
     const nowIso = new Date().toISOString()
-    const today = nowIso.split('T')[0]
+    const today = getTodayDateKey()
     const existing = await this.getGoalByCourse(courseId)
 
     const historyEntry: StudyGoalHistory = {
@@ -386,17 +387,9 @@ export const estudosRepository = {
     const goal = await this.getGoalByCourse(courseId)
     const sessions = await this.getSessionsByCourse(courseId)
 
-    const todayStr = new Date().toISOString().split('T')[0]
-
-    // 7 dias incluindo hoje
-    const d7 = new Date()
-    d7.setDate(d7.getDate() - 6)
-    const weekStartStr = d7.toISOString().split('T')[0]
-
-    // 30 dias incluindo hoje
-    const d30 = new Date()
-    d30.setDate(d30.getDate() - 29)
-    const monthStartStr = d30.toISOString().split('T')[0]
+    const todayStr = getTodayDateKey()
+    const weekStartStr = getDaysAgoKey(6)
+    const monthStartStr = getDaysAgoKey(29)
 
     const todayMinutes = sessions
       .filter((s) => s.date === todayStr)
@@ -430,10 +423,8 @@ export const estudosRepository = {
   }> {
     const [courses, sessions] = await Promise.all([this.getCourses(), this.getAllSessions()])
 
-    const todayStr = new Date().toISOString().split('T')[0]
-    const d7 = new Date()
-    d7.setDate(d7.getDate() - 6)
-    const weekStartStr = d7.toISOString().split('T')[0]
+    const todayStr = getTodayDateKey()
+    const weekStartStr = getDaysAgoKey(6)
 
     const todayMinutes = sessions
       .filter((s) => s.date === todayStr)

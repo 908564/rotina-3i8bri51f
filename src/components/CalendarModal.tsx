@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
+import { getTodayDateKey, parseLocalDate, isToday as checkIsToday } from '@/lib/dateUtils'
 
 interface CalendarModalProps {
   open: boolean
@@ -19,8 +20,8 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   onSelectDate,
 }) => {
   const [viewDate, setViewDate] = useState(() => {
-    const parts = selectedDate.split('-')
-    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1)
+    const d = parseLocalDate(selectedDate)
+    return new Date(d.getFullYear(), d.getMonth(), 1)
   })
 
   const year = viewDate.getFullYear()
@@ -40,7 +41,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   }
 
   const handleTodayShortcut = () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getTodayDateKey()
     onSelectDate(today)
     onClose()
   }
@@ -121,7 +122,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
             const dayNum = parseInt(dateStr.split('-')[2])
             const isSelected = dateStr === selectedDate
             const hasNote = datesWithNotes.has(dateStr)
-            const isToday = dateStr === new Date().toISOString().split('T')[0]
+            const isToday = checkIsToday(dateStr)
 
             return (
               <button

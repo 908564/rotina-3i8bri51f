@@ -1,4 +1,5 @@
 import { idb } from '../indexedDb'
+import { getTodayDateKey, getDaysAgoKey, subDaysFromDateKey } from '../dateUtils'
 import {
   Livro,
   LivroMeta,
@@ -54,7 +55,7 @@ export const leituraRepository = {
     data: Omit<Livro, 'id' | 'created' | 'updated'> & { id?: string },
   ): Promise<Livro> {
     const now = new Date().toISOString()
-    const today = now.split('T')[0]
+    const today = getTodayDateKey()
     let existing: Livro | undefined
     if (data.id) {
       existing = await this.getLivroById(data.id)
@@ -125,7 +126,7 @@ export const leituraRepository = {
     if (!livro) throw new Error('Livro não encontrado')
 
     const now = new Date().toISOString()
-    const today = now.split('T')[0]
+    const today = getTodayDateKey()
 
     const goalHistory = livro.goalHistory ? [...livro.goalHistory] : []
 
@@ -231,7 +232,7 @@ export const leituraRepository = {
     const finalPage = livro.totalPages ? Math.min(livro.totalPages, newCurrentPage) : newCurrentPage
 
     const now = new Date()
-    const dateStr = params.dateRead || now.toISOString().split('T')[0]
+    const dateStr = params.dateRead || getTodayDateKey()
 
     // Salva a meta vigente do livro nesta data
     const effectiveGoal = getBookGoalForDate(livro, dateStr)
@@ -301,15 +302,9 @@ export const leituraRepository = {
   async getGoalsProgress(): Promise<ReadingGoalsProgress> {
     const allBooks = await this.getLivros()
     const allHistory = await this.getAllHistorico()
-    const today = new Date().toISOString().split('T')[0]
-
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0]
-
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
-    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
+    const today = getTodayDateKey()
+    const sevenDaysAgoStr = getDaysAgoKey(6)
+    const thirtyDaysAgoStr = getDaysAgoKey(29)
 
     // Livros com status 'lendo'
     const readingBooks = allBooks.filter((b) => b.status === 'lendo')
@@ -506,34 +501,33 @@ export const leituraRepository = {
     }
 
     let streak = 0
-    const cursor = new Date()
+    let cursorDateStr = today
 
     // Avalia o dia de hoje
     const todayEval = evaluateDayGoal(today)
     if (todayEval.hasTarget && todayEval.isMet) {
       streak++
-      cursor.setDate(cursor.getDate() - 1)
+      cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
     } else {
       // Se hoje ainda não atingiu ou não tem meta, começamos a checar a partir de ontem
-      cursor.setDate(cursor.getDate() - 1)
+      cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
     }
 
     // Varre para trás até 365 dias
     let daysChecked = 0
     while (daysChecked < 365) {
       daysChecked++
-      const dStr = cursor.toISOString().split('T')[0]
-      const dayEval = evaluateDayGoal(dStr)
+      const dayEval = evaluateDayGoal(cursorDateStr)
 
       if (!dayEval.hasTarget) {
         // "Dias sem nenhum livro com meta não quebram nem aumentam a sequência."
-        cursor.setDate(cursor.getDate() - 1)
+        cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
         continue
       }
 
       if (dayEval.isMet) {
         streak++
-        cursor.setDate(cursor.getDate() - 1)
+        cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
       } else {
         // Quebrou a sequência
         break
