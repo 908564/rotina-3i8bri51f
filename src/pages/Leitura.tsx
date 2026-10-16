@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { BookOpen, Plus, Flame, Search, BookMarked, SlidersHorizontal, Target } from 'lucide-react'
 import { Livro, ReadingGoalsProgress, BookStatus } from '@/lib/types'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
@@ -12,10 +13,15 @@ import { BookDetailView } from '@/components/BookDetailView'
 import { cn } from '@/lib/utils'
 
 export default function LeituraPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const bookParam = searchParams.get('book')
+  const focusParam = searchParams.get('focus') === 'goals'
+
   const { dataVersion, notifyDataChanged } = useApp()
   const [livros, setLivros] = useState<Livro[]>([])
   const [goals, setGoals] = useState<ReadingGoalsProgress | null>(null)
-  const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(bookParam)
+  const [focusGoals, setFocusGoals] = useState<boolean>(focusParam)
   const [statusFilter, setStatusFilter] = useState<'todos' | BookStatus>('todos')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -33,6 +39,16 @@ export default function LeituraPage() {
   useEffect(() => {
     loadData()
   }, [loadData, dataVersion])
+
+  // Sincroniza selectedBookId e focusGoals se a URL mudar
+  useEffect(() => {
+    if (bookParam) {
+      setSelectedBookId(bookParam)
+      if (focusParam) {
+        setFocusGoals(true)
+      }
+    }
+  }, [bookParam, focusParam])
 
   const handleOpenAdd = () => {
     setEditingBook(null)
@@ -77,10 +93,21 @@ export default function LeituraPage() {
       {!isTablet && selectedBookId ? (
         <BookDetailView
           bookId={selectedBookId}
-          onBack={() => setSelectedBookId(null)}
+          focusGoals={focusGoals}
+          onBack={() => {
+            setSelectedBookId(null)
+            setFocusGoals(false)
+            if (searchParams.get('book')) {
+              setSearchParams({})
+            }
+          }}
           onEditBook={handleOpenEdit}
           onBookDeleted={() => {
             setSelectedBookId(null)
+            setFocusGoals(false)
+            if (searchParams.get('book')) {
+              setSearchParams({})
+            }
             loadData()
             notifyDataChanged()
           }}
@@ -321,7 +348,10 @@ export default function LeituraPage() {
                     return (
                       <Card
                         key={livro.id}
-                        onClick={() => setSelectedBookId(livro.id)}
+                        onClick={() => {
+                          setSelectedBookId(livro.id)
+                          setFocusGoals(false)
+                        }}
                         className={cn(
                           'rounded-2xl border-border overflow-hidden cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 group bg-card',
                           isSelected && 'ring-2 ring-[#34BEAA]',
@@ -393,10 +423,21 @@ export default function LeituraPage() {
               <div className="col-span-7 sticky top-6 bg-card border border-border rounded-2xl p-6 shadow-subtle">
                 <BookDetailView
                   bookId={selectedBookId}
-                  onBack={() => setSelectedBookId(null)}
+                  focusGoals={focusGoals}
+                  onBack={() => {
+                    setSelectedBookId(null)
+                    setFocusGoals(false)
+                    if (searchParams.get('book')) {
+                      setSearchParams({})
+                    }
+                  }}
                   onEditBook={handleOpenEdit}
                   onBookDeleted={() => {
                     setSelectedBookId(null)
+                    setFocusGoals(false)
+                    if (searchParams.get('book')) {
+                      setSearchParams({})
+                    }
                     loadData()
                     notifyDataChanged()
                   }}

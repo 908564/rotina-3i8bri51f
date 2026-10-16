@@ -38,6 +38,7 @@ interface BookDetailViewProps {
   onEditBook: (book: Livro) => void
   onBookDeleted: () => void
   onUpdated: () => void
+  focusGoals?: boolean
 }
 
 export const BookDetailView: React.FC<BookDetailViewProps> = ({
@@ -46,6 +47,7 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
   onEditBook,
   onBookDeleted,
   onUpdated,
+  focusGoals = false,
 }) => {
   const [book, setBook] = useState<Livro | null>(null)
   const [anotacoes, setAnotacoes] = useState<LivroAnotacao[]>([])
@@ -78,6 +80,18 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    if (focusGoals && book) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById('book-goals-section')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [focusGoals, book])
 
   const handleDeleteBook = async () => {
     await leituraRepository.deleteLivro(bookId)
@@ -287,35 +301,34 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
               onClick={() => setQuickAddOpen(true)}
               className="flex-1 sm:flex-initial min-h-[44px] px-6 rounded-xl bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white font-semibold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              <Plus className="w-4 h-4" /> + Registrar leitura hoje
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setGoalModalOpen(true)}
-              className="min-h-[44px] px-4 rounded-xl border-border text-foreground text-xs font-semibold hover:bg-muted flex items-center gap-1.5"
-            >
-              <Target className="w-4 h-4 text-[#34BEAA]" />
-              {hasGoal ? 'Editar meta' : 'Definir meta'}
+              <Plus className="w-4 h-4" /> Registrar leitura hoje
             </Button>
           </div>
         </div>
       </div>
 
       {/* SEÇÃO: PROGRESSO DAS METAS DESTE LIVRO (SEMANAL E MENSAL POR LIVRO) */}
-      <div className="p-4 rounded-2xl bg-card border border-border shadow-subtle space-y-3">
+      <div
+        id="book-goals-section"
+        className={`p-4 rounded-2xl bg-card border shadow-subtle space-y-3 transition-all duration-700 ${
+          focusGoals ? 'border-[#34BEAA] ring-2 ring-[#34BEAA]/40 shadow-md' : 'border-border'
+        }`}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-[#34BEAA]" />
             <h3 className="text-sm font-bold text-foreground">Metas e Progresso do Livro</h3>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setGoalModalOpen(true)}
-            className="text-xs h-8 text-[#34BEAA] hover:bg-[#34BEAA]/10 font-semibold"
-          >
-            {hasGoal ? 'Alterar meta' : '+ Adicionar meta'}
-          </Button>
+          {hasGoal && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setGoalModalOpen(true)}
+              className="text-xs h-8 text-[#34BEAA] hover:bg-[#34BEAA]/10 font-semibold"
+            >
+              Editar meta
+            </Button>
+          )}
         </div>
 
         {hasGoal ? (

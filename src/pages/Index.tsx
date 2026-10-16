@@ -29,6 +29,10 @@ export default function Index() {
   const [loading, setLoading] = useState(true)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [readingDetailOpen, setReadingDetailOpen] = useState(false)
+  const [selectBookForGoalOpen, setSelectBookForGoalOpen] = useState(false)
+  const [readingBooks, setReadingBooks] = useState<
+    { id: string; title: string; author: string; coverPhoto?: string }[]
+  >([])
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -64,6 +68,40 @@ export default function Index() {
 
     return { greeting: g, formattedDate: formatted }
   }, [])
+
+  const handleOpenSetGoal = async () => {
+    try {
+      const { leituraRepository } = await import('@/lib/repositories/leituraRepository')
+      const allBooks = await leituraRepository.getLivros()
+      const lendoBooks = allBooks.filter((b) => b.status === 'lendo')
+
+      if (lendoBooks.length === 0) {
+        // Se nenhum livro está "lendo", verifica se há algum livro na biblioteca
+        if (allBooks.length === 1) {
+          navigate(`/leitura?book=${allBooks[0].id}&focus=goals`)
+        } else if (allBooks.length > 1) {
+          setReadingBooks(allBooks)
+          setSelectBookForGoalOpen(true)
+        } else {
+          navigate('/leitura')
+        }
+      } else if (lendoBooks.length === 1) {
+        // Se há exatamente 1 livro "lendo", vai direto
+        navigate(`/leitura?book=${lendoBooks[0].id}&focus=goals`)
+      } else {
+        // Se houver mais de um livro "lendo", abre o seletor
+        setReadingBooks(lendoBooks)
+        setSelectBookForGoalOpen(true)
+      }
+    } catch {
+      navigate('/leitura')
+    }
+  }
+
+  const handleSelectBookForGoal = (bookId: string) => {
+    setSelectBookForGoalOpen(false)
+    navigate(`/leitura?book=${bookId}&focus=goals`)
+  }
 
   const handleDismissWelcome = () => {
     updateSettings({ hasSeenOnboarding: true })
@@ -326,7 +364,7 @@ export default function Index() {
                       <Button
                         variant="link"
                         size="sm"
-                        onClick={() => navigate('/leitura')}
+                        onClick={handleOpenSetGoal}
                         className="p-0 h-auto text-xs text-[#34BEAA] font-semibold hover:underline"
                       >
                         Definir meta em um livro →
@@ -506,6 +544,53 @@ export default function Index() {
         }}
       />
 
+      {/* MODAL DE SELEÇÃO DE LIVRO PARA DEFINIR META */}
+      <Dialog open={selectBookForGoalOpen} onOpenChange={setSelectBookForGoalOpen}>
+        <DialogContent className="sm:max-w-md bg-card rounded-2xl p-6 border border-border">
+          <DialogHeader className="text-left space-y-1">
+            <div className="flex items-center gap-2 text-[#34BEAA]">
+              <Target className="w-5 h-5" />
+              <span className="text-xs font-bold uppercase tracking-wider">Definir Meta</span>
+            </div>
+            <DialogTitle className="text-lg font-bold">Escolha o livro</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 pt-2 max-h-[60vh] overflow-y-auto">
+            <p className="text-xs text-muted-foreground mb-3">
+              Selecione em qual dos seus livros em andamento você deseja definir uma meta:
+            </p>
+            {readingBooks.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => handleSelectBookForGoal(b.id)}
+                className="w-full text-left p-3 rounded-xl bg-muted/40 hover:bg-muted/80 border border-border transition-all flex items-center justify-between gap-3 group active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {b.coverPhoto ? (
+                    <img
+                      src={b.coverPhoto}
+                      alt={b.title}
+                      className="w-10 h-14 object-cover rounded-md border border-border shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-14 rounded-md bg-[#34BEAA]/20 text-[#34BEAA] flex items-center justify-center font-bold text-base shrink-0">
+                      {b.title.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-foreground line-clamp-1 group-hover:text-[#34BEAA] transition-colors">
+                      {b.title}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground line-clamp-1">{b.author}</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL DE DETALHE POR LIVRO DO PROGRESSO DE HOJE */}
       <Dialog open={readingDetailOpen} onOpenChange={setReadingDetailOpen}>
         <DialogContent className="sm:max-w-md bg-card rounded-2xl p-6 border border-border max-h-[85vh] overflow-y-auto">
@@ -530,7 +615,7 @@ export default function Index() {
                     key={bp.book.id}
                     onClick={() => {
                       setReadingDetailOpen(false)
-                      navigate('/leitura')
+                      navigate(`/leitura?book=${bp.book.id}`)
                     }}
                     className="p-3.5 rounded-xl bg-muted/30 border border-border hover:bg-muted/60 transition-colors cursor-pointer space-y-2"
                   >
