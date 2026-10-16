@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { X, Plus, FileText } from 'lucide-react'
+import { getTodayDateKey } from '@/lib/dateUtils'
 
 interface WorkNoteFormModalProps {
   open: boolean
@@ -47,7 +48,7 @@ export const WorkNoteFormModal: React.FC<WorkNoteFormModalProps> = ({
       setTags(editingNote.tags || [])
     } else {
       setTitle('')
-      setDate(new Date().toISOString().split('T')[0])
+      setDate(getTodayDateKey())
       setBody('')
       setTags([])
     }

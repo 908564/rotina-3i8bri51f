@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { X, Plus } from 'lucide-react'
+import { getTodayDateKey } from '@/lib/dateUtils'
 
 interface ProjectFormModalProps {
   open: boolean
@@ -64,7 +65,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       setDescription('')
       setObjective('')
       setStatus('em_andamento')
-      setStartDate(new Date().toISOString().split('T')[0])
+      setStartDate(getTodayDateKey())
       setEndDate('')
       setExperienceId('')
       setTags([])

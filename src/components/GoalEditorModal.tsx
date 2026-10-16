@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Target, Calendar, Sparkles, BookOpen, Clock, HelpCircle } from 'lucide-react'
 import { LivroMeta } from '@/lib/types'
+import { getTodayDateKey, daysBetween } from '@/lib/dateUtils'
 
 interface GoalEditorFieldsProps {
   goal: LivroMeta
@@ -105,12 +106,9 @@ export const GoalEditorFields: React.FC<GoalEditorFieldsProps> = ({
     const remainingPages = Math.max(0, totalPages - currentPage)
     if (remainingPages === 0) return { remainingPages: 0, daysLeft: 0, suggestedPagesPerDay: 0 }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const target = new Date(targetDate + 'T00:00:00')
-
-    const diffTime = target.getTime() - today.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    // Diferença em dias corridos, sempre no fuso local
+    const today = getTodayDateKey()
+    const diffDays = daysBetween(today, targetDate)
 
     if (diffDays <= 0) {
       return {

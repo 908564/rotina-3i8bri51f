@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { getTodayDateKey, parseLocalDate } from '@/lib/dateUtils'
 
 interface ProjectDetailViewProps {
   project: Project
@@ -44,7 +45,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [addingTask, setAddingTask] = useState(false)
 
   // Anotações
-  const [noteDate, setNoteDate] = useState(new Date().toISOString().split('T')[0])
+  const [noteDate, setNoteDate] = useState(getTodayDateKey())
   const [noteText, setNoteText] = useState('')
   const [noteSaveStatus, setNoteSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
@@ -93,7 +94,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       setNoteSaveStatus('saved')
       setNoteText('')
       setEditingNoteId(null)
-      setNoteDate(new Date().toISOString().split('T')[0])
+      setNoteDate(getTodayDateKey())
       onProjectUpdated()
       toast({
         title: 'Anotação salva ✓',
@@ -368,7 +369,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   onClick={() => {
                     setEditingNoteId(null)
                     setNoteText('')
-                    setNoteDate(new Date().toISOString().split('T')[0])
+                    setNoteDate(getTodayDateKey())
                   }}
                   className="min-h-[44px] h-9 rounded-xl text-xs"
                 >
@@ -401,7 +402,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-foreground flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-[#0284C7]" />
-                      {new Date(note.date + 'T00:00:00').toLocaleDateString('pt-BR', {
+                      {parseLocalDate(note.date).toLocaleDateString('pt-BR', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',

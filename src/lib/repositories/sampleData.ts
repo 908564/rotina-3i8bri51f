@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { settingsRepository } from './settingsRepository'
+import { getDaysAgoKey } from '../dateUtils'
 import {
   EscritaNote,
   Livro,
@@ -17,11 +18,9 @@ import {
   WorkNote,
 } from '../types'
 
-// Função auxiliar para subtrair dias de hoje no formato YYYY-MM-DD
+// Função auxiliar para subtrair dias de hoje no formato YYYY-MM-DD (fuso local)
 function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().split('T')[0]
+  return getDaysAgoKey(n)
 }
 
 export async function loadSampleData(): Promise<void> {

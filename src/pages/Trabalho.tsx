@@ -36,6 +36,7 @@ import { AchievementFormModal } from '@/components/AchievementFormModal'
 import { ExperienceFormModal } from '@/components/ExperienceFormModal'
 import { WorkNoteFormModal } from '@/components/WorkNoteFormModal'
 import { cn } from '@/lib/utils'
+import { parseLocalDate } from '@/lib/dateUtils'
 
 type WorkTab = 'projetos' | 'conquistas' | 'experiencia' | 'anotacoes'
 
@@ -800,7 +801,7 @@ export default function TrabalhoPage() {
                           <div className="flex flex-wrap items-center gap-3">
                             <span className="flex items-center gap-1 font-medium">
                               <Calendar className="w-3.5 h-3.5 text-[#0284C7]" />
-                              {new Date(ach.date + 'T00:00:00').toLocaleDateString('pt-BR', {
+                              {parseLocalDate(ach.date).toLocaleDateString('pt-BR', {
                                 month: 'short',
                                 year: 'numeric',
                               })}
@@ -1070,7 +1071,7 @@ export default function TrabalhoPage() {
                           <div className="space-y-0.5">
                             <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-[#0284C7]" />
-                              {new Date(note.date + 'T00:00:00').toLocaleDateString('pt-BR', {
+                              {parseLocalDate(note.date).toLocaleDateString('pt-BR', {
                                 day: 'numeric',
                                 month: 'short',
                                 year: 'numeric',

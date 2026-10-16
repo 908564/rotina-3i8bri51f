@@ -2,9 +2,9 @@ import { idb } from '../indexedDb'
 import { getTodayDateKey, getDaysAgoKey } from '../dateUtils'
 import {
   Course,
-  CoursePage,
-  CourseCertificate,
-  StudyTimeSession,
+  StudyPage,
+  StudyCertificate,
+  StudySession,
   StudyGoal,
   StudyGoalHistory,
   CourseGoalProgress,
