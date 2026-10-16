@@ -8,6 +8,11 @@ import {
   LeituraHistorico,
   TreinoPlanoSemanal,
   TreinoLog,
+  Course,
+  StudyPage,
+  StudyCertificate,
+  StudySession,
+  StudyGoal,
 } from '../types'
 
 export const backupRepository = {
@@ -19,9 +24,14 @@ export const backupRepository = {
     const leitura_historico = await idb.getAll<LeituraHistorico>(idb.STORE_LEITURA_HISTORICO)
     const treino_plano_semanal = await idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO)
     const treino_log = await idb.getAll<TreinoLog>(idb.STORE_TREINO_LOG)
+    const courses = await idb.getAll<Course>(idb.STORE_COURSES)
+    const study_pages = await idb.getAll<StudyPage>(idb.STORE_STUDY_PAGES)
+    const study_certificates = await idb.getAll<StudyCertificate>(idb.STORE_STUDY_CERTIFICATES)
+    const study_sessions = await idb.getAll<StudySession>(idb.STORE_STUDY_SESSIONS)
+    const study_goals = await idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS)
 
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       appName: 'Rotina',
       exportedAt: new Date().toISOString(),
       settings,
@@ -32,6 +42,11 @@ export const backupRepository = {
         leitura_historico,
         treino_plano_semanal,
         treino_log,
+        courses,
+        study_pages,
+        study_certificates,
+        study_sessions,
+        study_goals,
       },
     }
   },
@@ -75,8 +90,13 @@ export const backupRepository = {
       await idb.clear(idb.STORE_LEITURA_HISTORICO)
       await idb.clear(idb.STORE_TREINO_PLANO)
       await idb.clear(idb.STORE_TREINO_LOG)
+      await idb.clear(idb.STORE_COURSES)
+      await idb.clear(idb.STORE_STUDY_PAGES)
+      await idb.clear(idb.STORE_STUDY_CERTIFICATES)
+      await idb.clear(idb.STORE_STUDY_SESSIONS)
+      await idb.clear(idb.STORE_STUDY_GOALS)
 
-      // Grava dados das coleções migrando livros antigos (schemaVersion 1 -> 2)
+      // Grava dados das coleções migrando livros antigos (schemaVersion 1 -> 2 -> 3)
       for (const item of valid.collections.escrita_notes) {
         await idb.put(idb.STORE_ESCRITA, item)
       }
@@ -102,6 +122,33 @@ export const backupRepository = {
         await idb.put(idb.STORE_TREINO_LOG, item)
       }
 
+      // Restaura coleções de estudos se presentes (v3) ou arrays vazios se v1/v2
+      if (Array.isArray(valid.collections.courses)) {
+        for (const item of valid.collections.courses) {
+          await idb.put(idb.STORE_COURSES, item)
+        }
+      }
+      if (Array.isArray(valid.collections.study_pages)) {
+        for (const item of valid.collections.study_pages) {
+          await idb.put(idb.STORE_STUDY_PAGES, item)
+        }
+      }
+      if (Array.isArray(valid.collections.study_certificates)) {
+        for (const item of valid.collections.study_certificates) {
+          await idb.put(idb.STORE_STUDY_CERTIFICATES, item)
+        }
+      }
+      if (Array.isArray(valid.collections.study_sessions)) {
+        for (const item of valid.collections.study_sessions) {
+          await idb.put(idb.STORE_STUDY_SESSIONS, item)
+        }
+      }
+      if (Array.isArray(valid.collections.study_goals)) {
+        for (const item of valid.collections.study_goals) {
+          await idb.put(idb.STORE_STUDY_GOALS, item)
+        }
+      }
+
       // Restaura configurações se existirem
       if (valid.settings) {
         settingsRepository.saveSettings(valid.settings)
@@ -115,6 +162,11 @@ export const backupRepository = {
         await idb.clear(idb.STORE_LEITURA_HISTORICO)
         await idb.clear(idb.STORE_TREINO_PLANO)
         await idb.clear(idb.STORE_TREINO_LOG)
+        await idb.clear(idb.STORE_COURSES)
+        await idb.clear(idb.STORE_STUDY_PAGES)
+        await idb.clear(idb.STORE_STUDY_CERTIFICATES)
+        await idb.clear(idb.STORE_STUDY_SESSIONS)
+        await idb.clear(idb.STORE_STUDY_GOALS)
 
         for (const item of previousSnapshot.collections.escrita_notes)
           await idb.put(idb.STORE_ESCRITA, item)
@@ -128,6 +180,26 @@ export const backupRepository = {
           await idb.put(idb.STORE_TREINO_PLANO, item)
         for (const item of previousSnapshot.collections.treino_log)
           await idb.put(idb.STORE_TREINO_LOG, item)
+        if (previousSnapshot.collections.courses) {
+          for (const item of previousSnapshot.collections.courses)
+            await idb.put(idb.STORE_COURSES, item)
+        }
+        if (previousSnapshot.collections.study_pages) {
+          for (const item of previousSnapshot.collections.study_pages)
+            await idb.put(idb.STORE_STUDY_PAGES, item)
+        }
+        if (previousSnapshot.collections.study_certificates) {
+          for (const item of previousSnapshot.collections.study_certificates)
+            await idb.put(idb.STORE_STUDY_CERTIFICATES, item)
+        }
+        if (previousSnapshot.collections.study_sessions) {
+          for (const item of previousSnapshot.collections.study_sessions)
+            await idb.put(idb.STORE_STUDY_SESSIONS, item)
+        }
+        if (previousSnapshot.collections.study_goals) {
+          for (const item of previousSnapshot.collections.study_goals)
+            await idb.put(idb.STORE_STUDY_GOALS, item)
+        }
         settingsRepository.saveSettings(previousSnapshot.settings)
       } catch {
         // Rollback secundário falhou
@@ -143,6 +215,11 @@ export const backupRepository = {
     await idb.clear(idb.STORE_LEITURA_HISTORICO)
     await idb.clear(idb.STORE_TREINO_PLANO)
     await idb.clear(idb.STORE_TREINO_LOG)
+    await idb.clear(idb.STORE_COURSES)
+    await idb.clear(idb.STORE_STUDY_PAGES)
+    await idb.clear(idb.STORE_STUDY_CERTIFICATES)
+    await idb.clear(idb.STORE_STUDY_SESSIONS)
+    await idb.clear(idb.STORE_STUDY_GOALS)
 
     // Reseta configurações básicas preservando tema
     const current = settingsRepository.getSettings()

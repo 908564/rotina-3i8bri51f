@@ -10,7 +10,7 @@ import {
 } from './types'
 
 const DB_NAME = 'rotina_db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 const STORE_ESCRITA = 'escrita_notes'
 const STORE_LIVROS = 'livros'
@@ -18,6 +18,11 @@ const STORE_LIVRO_ANOTACOES = 'livro_anotacoes'
 const STORE_LEITURA_HISTORICO = 'leitura_historico'
 const STORE_TREINO_PLANO = 'treino_plano_semanal'
 const STORE_TREINO_LOG = 'treino_log'
+const STORE_COURSES = 'courses'
+const STORE_STUDY_PAGES = 'study_pages'
+const STORE_STUDY_CERTIFICATES = 'study_certificates'
+const STORE_STUDY_SESSIONS = 'study_sessions'
+const STORE_STUDY_GOALS = 'study_goals'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -58,6 +63,32 @@ function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_TREINO_LOG)) {
         const store = db.createObjectStore(STORE_TREINO_LOG, { keyPath: 'id' })
         store.createIndex('day', 'day', { unique: false })
+      }
+
+      // v2: ESTUDOS
+      if (!db.objectStoreNames.contains(STORE_COURSES)) {
+        db.createObjectStore(STORE_COURSES, { keyPath: 'id' })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_STUDY_PAGES)) {
+        const store = db.createObjectStore(STORE_STUDY_PAGES, { keyPath: 'id' })
+        store.createIndex('courseId', 'courseId', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_STUDY_CERTIFICATES)) {
+        const store = db.createObjectStore(STORE_STUDY_CERTIFICATES, { keyPath: 'id' })
+        store.createIndex('courseId', 'courseId', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_STUDY_SESSIONS)) {
+        const store = db.createObjectStore(STORE_STUDY_SESSIONS, { keyPath: 'id' })
+        store.createIndex('courseId', 'courseId', { unique: false })
+        store.createIndex('date', 'date', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_STUDY_GOALS)) {
+        const store = db.createObjectStore(STORE_STUDY_GOALS, { keyPath: 'id' })
+        store.createIndex('courseId', 'courseId', { unique: true })
       }
     }
 
@@ -131,6 +162,11 @@ export const idb = {
   STORE_LEITURA_HISTORICO,
   STORE_TREINO_PLANO,
   STORE_TREINO_LOG,
+  STORE_COURSES,
+  STORE_STUDY_PAGES,
+  STORE_STUDY_CERTIFICATES,
+  STORE_STUDY_SESSIONS,
+  STORE_STUDY_GOALS,
   getAll: getAllFromStore,
   get: getFromStore,
   put: putInStore,

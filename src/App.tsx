@@ -8,6 +8,7 @@ import Index from './pages/Index'
 import EscritaPage from './pages/Escrita'
 import LeituraPage from './pages/Leitura'
 import TreinoPage from './pages/Treino'
+import EstudosPage from './pages/Estudos'
 import MaisPage from './pages/Mais'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/escrita" element={<EscritaPage />} />
             <Route path="/leitura" element={<LeituraPage />} />
             <Route path="/treino" element={<TreinoPage />} />
+            <Route path="/estudos" element={<EstudosPage />} />
             <Route path="/mais" element={<MaisPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />

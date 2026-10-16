@@ -1,8 +1,10 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, PenLine, BookOpen, Dumbbell, MoreHorizontal } from 'lucide-react'
+import { Home, PenLine, BookOpen, Dumbbell, GraduationCap, MoreHorizontal } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { cn } from '@/lib/utils'
+
+import { ModuleKey } from '@/lib/types'
 
 interface NavItemConfig {
   to: string
@@ -10,7 +12,7 @@ interface NavItemConfig {
   icon: React.ElementType
   colorClass: string
   pillBg: string
-  moduleKey?: 'escrita' | 'leitura' | 'treino'
+  moduleKey?: ModuleKey
 }
 
 export const BottomNav: React.FC = () => {
@@ -47,6 +49,14 @@ export const BottomNav: React.FC = () => {
       colorClass: 'text-[#F07B6A]',
       pillBg: 'bg-[#F07B6A]/15 text-[#F07B6A]',
       moduleKey: 'treino',
+    },
+    {
+      to: '/estudos',
+      label: 'Estudos',
+      icon: GraduationCap,
+      colorClass: 'text-[#8B5CF6]',
+      pillBg: 'bg-[#8B5CF6]/15 text-[#8B5CF6]',
+      moduleKey: 'estudos',
     },
     {
       to: '/mais',

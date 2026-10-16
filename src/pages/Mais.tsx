@@ -240,6 +240,12 @@ export default function MaisPage() {
       desc: 'Plano semanal, logs de séries e evolução de carga.',
       color: '#F07B6A',
     },
+    {
+      key: 'estudos',
+      label: 'Estudos',
+      desc: 'Cursos, faculdade, certificações, anotações em blocos e certificados.',
+      color: '#8B5CF6',
+    },
   ]
 
   return (

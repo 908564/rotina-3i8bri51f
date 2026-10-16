@@ -8,6 +8,7 @@ export const defaultSettings: AppSettings = {
     escrita: true,
     leitura: true,
     treino: true,
+    estudos: true,
   },
   hasSeenOnboarding: false,
   userName: '',

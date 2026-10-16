@@ -5,6 +5,7 @@ import {
   Dumbbell,
   BookOpen,
   PenLine,
+  GraduationCap,
   ChevronRight,
   Flame,
   Plus,
@@ -13,11 +14,18 @@ import {
   Coffee,
   RotateCcw,
   Target,
+  Clock,
+  BookMarked,
+  ArrowRight,
 } from 'lucide-react'
+import { Course } from '@/lib/types'
+import { estudosRepository } from '@/lib/repositories/estudosRepository'
+import { Label } from '@/components/ui/label'
 import { useApp } from '@/lib/context'
 import { hojeRepository, TodayOverview } from '@/lib/repositories/hojeRepository'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { QuickAddPagesModal } from '@/components/QuickAddPagesModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -33,6 +41,15 @@ export default function Index() {
   const [readingBooks, setReadingBooks] = useState<
     { id: string; title: string; author: string; coverPhoto?: string }[]
   >([])
+
+  // Modal de registro rápido de tempo de estudo
+  const [quickStudyTimeOpen, setQuickStudyTimeOpen] = useState(false)
+  const [allCourses, setAllCourses] = useState<Course[]>([])
+  const [selectedStudyCourseId, setSelectedStudyCourseId] = useState<string>('')
+  const [quickStudyMinutes, setQuickStudyMinutes] = useState<string>('45')
+  const [quickStudyNotes, setQuickStudyNotes] = useState<string>('')
+  const [savingQuickStudy, setSavingQuickStudy] = useState(false)
+
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -105,6 +122,63 @@ export default function Index() {
 
   const handleDismissWelcome = () => {
     updateSettings({ hasSeenOnboarding: true })
+  }
+
+  const handleOpenQuickStudyTime = async () => {
+    const courses = await estudosRepository.getCourses()
+    setAllCourses(courses)
+
+    if (courses.length === 0) {
+      navigate('/estudos')
+      return
+    }
+
+    // Lembra o último curso usado (mesmo padrão do registro de leitura)
+    const lastUsed = estudosRepository.getLastCourseUsedForTime()
+    const defaultCourseId =
+      (lastUsed && courses.some((c) => c.id === lastUsed) && lastUsed) ||
+      courses.find((c) => c.status === 'em_andamento')?.id ||
+      courses[0].id
+
+    setSelectedStudyCourseId(defaultCourseId)
+    setQuickStudyMinutes('45')
+    setQuickStudyNotes('')
+    setQuickStudyTimeOpen(true)
+  }
+
+  const handleSaveQuickStudyTime = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const mins = Number(quickStudyMinutes)
+    if (!selectedStudyCourseId || isNaN(mins) || mins <= 0) {
+      toast({
+        title: 'Informe um tempo válido',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSavingQuickStudy(true)
+    try {
+      const todayStr = new Date().toISOString().split('T')[0]
+      await estudosRepository.saveSession({
+        courseId: selectedStudyCourseId,
+        date: todayStr,
+        minutes: mins,
+        notes: quickStudyNotes.trim() ? quickStudyNotes.trim() : undefined,
+      })
+
+      const targetCourse = allCourses.find((c) => c.id === selectedStudyCourseId)
+      toast({
+        title: 'Tempo de estudo registrado! ⏱️',
+        description: `${mins} min adicionados a ${targetCourse?.name || 'seu curso'}.`,
+      })
+
+      setQuickStudyTimeOpen(false)
+      loadData()
+      notifyDataChanged()
+    } finally {
+      setSavingQuickStudy(false)
+    }
   }
 
   const handleLoadSamples = async () => {
@@ -194,6 +268,7 @@ export default function Index() {
               activeModules.treino && 'Treino',
               activeModules.leitura && 'Leitura',
               activeModules.escrita && 'Escrita',
+              activeModules.estudos && 'Estudos',
             ]
               .filter(Boolean)
               .join(' • ') || 'Nenhum módulo ativo'}
@@ -532,6 +607,116 @@ export default function Index() {
             </CardContent>
           </Card>
         )}
+
+        {/* CARD ESTUDOS (somente se o módulo estiver ativo) */}
+        {activeModules.estudos && overview?.study && (
+          <Card className="rounded-2xl border-border shadow-subtle overflow-hidden transition-all hover:border-[#8B5CF6]/40">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div
+                  className="flex items-center gap-2.5 cursor-pointer flex-1"
+                  onClick={() => navigate('/estudos')}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold leading-tight">Estudos</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {overview.study.coursesCount === 0
+                        ? 'Nenhum curso cadastrado'
+                        : `${overview.study.coursesCount} ${
+                            overview.study.coursesCount === 1
+                              ? 'curso cadastrado'
+                              : 'cursos cadastrados'
+                          }`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-[#8B5CF6] bg-[#8B5CF6]/10 px-2.5 py-1 rounded-full">
+                    {overview.study.todayMinutes} min hoje
+                  </span>
+                </div>
+              </div>
+
+              {overview.study.coursesCount === 0 ? (
+                /* Convite para cadastrar o primeiro curso */
+                <div className="rounded-xl bg-muted/30 border border-dashed border-border/80 p-4 text-center space-y-2.5">
+                  <p className="text-xs text-muted-foreground">
+                    Você ainda não cadastrou nenhum curso, faculdade ou certificação.
+                  </p>
+                  <Button
+                    onClick={() => navigate('/estudos')}
+                    className="h-9 rounded-xl bg-[#8B5CF6] hover:bg-[#8B5CF6]/90 text-white text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Cadastrar primeiro curso
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Minutos estudados hoje e na semana */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-border text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Hoje:</span>{' '}
+                      <span className="font-bold text-foreground">
+                        {overview.study.todayMinutes} min
+                      </span>
+                    </div>
+                    <div className="h-3 w-px bg-border" />
+                    <div>
+                      <span className="text-muted-foreground">Semana:</span>{' '}
+                      <span className="font-bold text-[#8B5CF6]">
+                        {overview.study.weekMinutes} min
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Atalho para continuar a última página de anotação aberta */}
+                  {overview.study.lastPage && (
+                    <div
+                      onClick={() =>
+                        navigate(
+                          `/estudos?course=${overview.study?.lastPage?.courseId}&page=${overview.study?.lastPage?.pageId}`,
+                        )
+                      }
+                      className="p-3 rounded-xl bg-[#8B5CF6]/5 border border-[#8B5CF6]/20 hover:border-[#8B5CF6]/50 transition-colors cursor-pointer space-y-0.5 group"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-[#8B5CF6] font-semibold">
+                        <span className="flex items-center gap-1">
+                          <BookMarked className="w-3.5 h-3.5" /> Continuar anotação
+                        </span>
+                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                      <p className="text-xs font-bold text-foreground line-clamp-1">
+                        {overview.study.lastPage.title}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Botões de ação */}
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      onClick={handleOpenQuickStudyTime}
+                      className="flex-1 min-h-[44px] rounded-xl bg-[#8B5CF6] hover:bg-[#8B5CF6]/90 text-white font-semibold text-sm shadow-sm active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />+ Tempo estudado
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/estudos')}
+                      className="min-h-[44px] px-3.5 rounded-xl border-border hover:bg-muted"
+                      aria-label="Abrir estudos"
+                    >
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* QUICK ADD MODAL */}
@@ -688,6 +873,108 @@ export default function Index() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL RÁPIDO DE REGISTRO DE TEMPO DE ESTUDO NA TELA HOJE */}
+      <Dialog open={quickStudyTimeOpen} onOpenChange={setQuickStudyTimeOpen}>
+        <DialogContent className="sm:max-w-md bg-card rounded-2xl p-5 sm:p-6 border border-border">
+          <DialogHeader className="text-left space-y-1">
+            <div className="flex items-center gap-2 text-[#8B5CF6]">
+              <Clock className="w-5 h-5" />
+              <span className="text-xs font-bold uppercase tracking-wider">Estudos de Hoje</span>
+            </div>
+            <DialogTitle className="text-lg font-bold">Registrar Tempo Estudado</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveQuickStudyTime} className="space-y-4 pt-1">
+            {/* Seleção do curso se houver mais de um */}
+            {allCourses.length > 1 ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="study-course-select" className="text-xs font-semibold">
+                  Qual curso você estudou? *
+                </Label>
+                <select
+                  id="study-course-select"
+                  value={selectedStudyCourseId}
+                  onChange={(e) => setSelectedStudyCourseId(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-background text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[#8B5CF6]"
+                >
+                  {allCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.institution})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : allCourses.length === 1 ? (
+              <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs">
+                <span className="text-muted-foreground">Curso:</span>{' '}
+                <span className="font-bold text-foreground">{allCourses[0].name}</span>
+              </div>
+            ) : null}
+
+            {/* Minutos dedicados */}
+            <div className="space-y-1.5">
+              <Label htmlFor="quick-study-mins" className="text-xs font-semibold">
+                Tempo dedicado (minutos) *
+              </Label>
+              <Input
+                id="quick-study-mins"
+                type="number"
+                min="1"
+                value={quickStudyMinutes}
+                onChange={(e) => setQuickStudyMinutes(e.target.value)}
+                className="rounded-xl text-xs sm:text-sm bg-background font-bold"
+                autoFocus
+              />
+              <div className="flex gap-2 pt-1">
+                {[15, 30, 45, 60, 90, 120].map((quick) => (
+                  <button
+                    key={quick}
+                    type="button"
+                    onClick={() => setQuickStudyMinutes(String(quick))}
+                    className="px-2.5 py-1 text-[11px] rounded-lg border border-border hover:bg-muted text-muted-foreground font-medium"
+                  >
+                    +{quick}m
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Observações opcionais */}
+            <div className="space-y-1.5">
+              <Label htmlFor="quick-study-notes" className="text-xs font-semibold">
+                Anotação / Resumo da sessão (opcional)
+              </Label>
+              <Input
+                id="quick-study-notes"
+                placeholder="Ex.: Aula sobre arquitetura de software, exercícios..."
+                value={quickStudyNotes}
+                onChange={(e) => setQuickStudyNotes(e.target.value)}
+                className="rounded-xl text-xs sm:text-sm bg-background"
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setQuickStudyTimeOpen(false)}
+                disabled={savingQuickStudy}
+                className="h-10 rounded-xl text-xs px-4"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingQuickStudy}
+                className="h-10 rounded-xl text-xs px-5 bg-[#8B5CF6] hover:bg-[#8B5CF6]/90 text-white font-semibold"
+              >
+                {savingQuickStudy ? 'Salvando...' : 'Salvar Sessão'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

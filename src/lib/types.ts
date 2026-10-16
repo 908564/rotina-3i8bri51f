@@ -3,7 +3,7 @@
  * Todos os registros possuem id (UUID), created (ISO) e updated (ISO).
  */
 
-export type ModuleKey = 'escrita' | 'leitura' | 'treino'
+export type ModuleKey = 'escrita' | 'leitura' | 'treino' | 'estudos'
 
 export interface AppSettings {
   theme: 'claro' | 'escuro' | 'sistema'
@@ -164,6 +164,103 @@ export interface ExerciseHistoryPoint {
 }
 
 // ========================
+// 4) ESTUDOS
+// ========================
+export type CourseType = 'faculdade' | 'curso' | 'certificacao'
+export type CourseStatus = 'em_andamento' | 'concluido' | 'pausado' | 'quero_fazer'
+
+export interface Course {
+  id: string
+  name: string
+  type: CourseType
+  institution: string
+  status: CourseStatus
+  progress?: number // 0 a 100 (%)
+  workloadHours?: number // carga horária opcional em horas
+  startDate: string // YYYY-MM-DD
+  endDate?: string // YYYY-MM-DD opcional
+  courseUrl?: string // link do curso opcional
+  color?: string // cor hexadecimal opcional (#8B5CF6, etc.)
+  icon?: string // nome de ícone opcional
+  created: string
+  updated: string
+}
+
+export type StudyBlockType =
+  | 'heading'
+  | 'subheading'
+  | 'paragraph'
+  | 'bullet_list'
+  | 'numbered_list'
+  | 'checklist'
+  | 'divider'
+
+export interface StudyBlock {
+  id: string
+  type: StudyBlockType
+  content: string // texto do bloco
+  checked?: boolean // para checklist
+}
+
+export interface StudyPage {
+  id: string
+  courseId: string
+  title: string
+  blocks: StudyBlock[]
+  created: string
+  updated: string
+}
+
+export interface StudyCertificate {
+  id: string
+  courseId: string
+  title: string
+  issueDate?: string // YYYY-MM-DD opcional
+  fileData: string // Data URL (Base64 data:application/pdf;base64,... ou data:image/jpeg;base64,...)
+  fileType: 'pdf' | 'image'
+  fileName: string
+  fileSize?: number
+  created: string
+  updated: string
+}
+
+export interface StudySession {
+  id: string
+  courseId: string
+  date: string // YYYY-MM-DD
+  minutes: number
+  notes?: string
+  created: string
+  updated: string
+}
+
+export interface StudyGoalHistory {
+  id: string
+  courseId: string
+  effectiveDate: string // YYYY-MM-DD
+  weeklyMinutes: number
+  created: string
+}
+
+export interface StudyGoal {
+  id: string
+  courseId: string
+  weeklyMinutes: number
+  history: StudyGoalHistory[]
+  created: string
+  updated: string
+}
+
+export interface CourseGoalProgress {
+  course: Course
+  weeklyMinutesTarget?: number
+  weekMinutes: number
+  monthMinutes: number
+  todayMinutes: number
+  hasGoal: boolean
+}
+
+// ========================
 // EXTENSIBILIDADE FUTURA (FASE 2 - PLACEHOLDERS)
 // ========================
 /*
@@ -203,5 +300,10 @@ export interface ExportDataPayload {
     leitura_historico: LeituraHistorico[]
     treino_plano_semanal: TreinoPlanoSemanal[]
     treino_log: TreinoLog[]
+    courses?: Course[]
+    study_pages?: StudyPage[]
+    study_certificates?: StudyCertificate[]
+    study_sessions?: StudySession[]
+    study_goals?: StudyGoal[]
   }
 }

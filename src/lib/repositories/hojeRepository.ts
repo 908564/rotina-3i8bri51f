@@ -1,8 +1,16 @@
 import { escritaRepository } from './escritaRepository'
 import { leituraRepository } from './leituraRepository'
 import { treinoRepository } from './treinoRepository'
+import { estudosRepository } from './estudosRepository'
 import { settingsRepository } from './settingsRepository'
-import { EscritaNote, TreinoPlanoSemanal, TreinoLog, ReadingGoalsProgress, Livro } from '../types'
+import {
+  EscritaNote,
+  TreinoPlanoSemanal,
+  TreinoLog,
+  ReadingGoalsProgress,
+  Livro,
+  Course,
+} from '../types'
 
 export interface TodayOverview {
   dateStr: string // YYYY-MM-DD
@@ -23,6 +31,13 @@ export interface TodayOverview {
   }
   writing: {
     todayNote?: EscritaNote
+  }
+  study?: {
+    coursesCount: number
+    todayMinutes: number
+    weekMinutes: number
+    lastCourse?: Course
+    lastPage?: { pageId: string; courseId: string; title: string }
   }
 }
 
@@ -57,7 +72,10 @@ export const hojeRepository = {
     // 3) Escrita
     const todayNote = await escritaRepository.getNoteByDate(dateStr)
 
-    // 4) Progresso geral do dia
+    // 4) Estudos
+    const studyOverview = await estudosRepository.getTodayStudyOverview()
+
+    // 5) Progresso geral do dia
     // Combina leitura diária (hoje / 20) e treino de hoje (completas / planejadas)
     let componentsCount = 0
     let totalScore = 0
@@ -97,6 +115,14 @@ export const hojeRepository = {
       totalScore += writingRatio
     }
 
+    if (settings.activeModules.estudos && studyOverview.coursesCount > 0) {
+      // Se houver estudos ativos com minutos hoje
+      if (studyOverview.todayMinutes > 0) {
+        componentsCount++
+        totalScore += Math.min(1, studyOverview.todayMinutes / 30)
+      }
+    }
+
     const overallProgressPercent =
       componentsCount > 0 ? Math.round((totalScore / componentsCount) * 100) : 0
 
@@ -120,6 +146,7 @@ export const hojeRepository = {
       writing: {
         todayNote,
       },
+      study: studyOverview,
     }
   },
 }
