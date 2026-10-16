@@ -30,6 +30,24 @@ export interface EscritaNote {
 // ========================
 export type BookStatus = 'quero_ler' | 'lendo' | 'concluido'
 
+export interface LivroMeta {
+  dailyPages?: number
+  dailyMinutes?: number
+  weeklyPages?: number
+  weeklyMinutes?: number
+  monthlyPages?: number
+  monthlyMinutes?: number
+  targetDate?: string // YYYY-MM-DD (data-alvo para terminar o livro)
+}
+
+export interface LivroMetaHistorico {
+  id: string
+  bookId: string
+  effectiveDate: string // YYYY-MM-DD (data a partir da qual esta meta passou a valer)
+  meta: LivroMeta
+  created: string
+}
+
 export interface Livro {
   id: string
   title: string
@@ -38,6 +56,8 @@ export interface Livro {
   currentPage: number
   status: BookStatus
   coverPhoto?: string // Data URL (Base64 JPEG comprimido)
+  goal?: LivroMeta
+  goalHistory?: LivroMetaHistorico[]
   created: string
   updated: string
 }
@@ -58,18 +78,45 @@ export interface LeituraHistorico {
   pagesAdded: number
   currentPage: number
   minutes?: number
+  // Meta vigente no dia do registro (opcional para histórico retrocompatível)
+  effectiveGoal?: LivroMeta
   created: string
   updated: string
 }
 
-export interface ReadingGoalsProgress {
-  dailyTarget: number // 20
-  weeklyTarget: number // 100
-  monthlyTarget: number // 430
+export interface BookGoalProgress {
+  book: Livro
+  dailyPagesTarget?: number
+  dailyMinutesTarget?: number
   todayPages: number
+  todayMinutes: number
+  weeklyPagesTarget?: number
+  weeklyMinutesTarget?: number
   weekPages: number
+  weekMinutes: number
+  monthlyPagesTarget?: number
+  monthlyMinutesTarget?: number
   monthPages: number
+  monthMinutes: number
+  hasAnyGoal: boolean
+}
+
+export interface ReadingGoalsProgress {
+  hasGoals: boolean // Indica se pelo menos um livro ativo ('lendo') possui meta definida
+  dailyPagesTarget: number // Soma das metas diárias em páginas dos livros 'lendo'
+  dailyMinutesTarget: number // Soma das metas diárias em minutos dos livros 'lendo'
+  todayPages: number
+  todayMinutes: number
+  weeklyPagesTarget: number // Soma das metas semanais em páginas (apenas livros com essa meta definida)
+  weeklyMinutesTarget: number
+  weekPages: number
+  weekMinutes: number
+  monthlyPagesTarget: number // Soma das metas mensais em páginas (apenas livros com essa meta definida)
+  monthlyMinutesTarget: number
+  monthPages: number
+  monthMinutes: number
   streak: number
+  booksProgress: BookGoalProgress[]
 }
 
 // ========================

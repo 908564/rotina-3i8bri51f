@@ -297,11 +297,15 @@ export async function loadSampleData(): Promise<void> {
     await idb.put(idb.STORE_TREINO_LOG, log)
   }
 
-  // 4. Livros
+  // 4. Livros com metas próprias individualizadas
   const book1Id = crypto.randomUUID()
   const book2Id = crypto.randomUUID()
   const book3Id = crypto.randomUUID()
   const book4Id = crypto.randomUUID()
+
+  // Data-alvo estimada para daqui a 30 dias
+  const targetDate1 = daysAgo(-30)
+  const targetDate2 = daysAgo(-20)
 
   const sampleLivros: Livro[] = [
     {
@@ -311,6 +315,28 @@ export async function loadSampleData(): Promise<void> {
       totalPages: 351,
       currentPage: 148,
       status: 'lendo',
+      goal: {
+        dailyPages: 15,
+        dailyMinutes: 20,
+        weeklyPages: 90,
+        monthlyPages: 360,
+        targetDate: targetDate1,
+      },
+      goalHistory: [
+        {
+          id: crypto.randomUUID(),
+          bookId: book1Id,
+          effectiveDate: daysAgo(14),
+          meta: {
+            dailyPages: 15,
+            dailyMinutes: 20,
+            weeklyPages: 90,
+            monthlyPages: 360,
+            targetDate: targetDate1,
+          },
+          created: nowIso,
+        },
+      ],
       created: nowIso,
       updated: nowIso,
     },
@@ -321,6 +347,28 @@ export async function loadSampleData(): Promise<void> {
       totalPages: 272,
       currentPage: 87,
       status: 'lendo',
+      goal: {
+        dailyPages: 10,
+        dailyMinutes: 15,
+        weeklyPages: 60,
+        monthlyPages: 240,
+        targetDate: targetDate2,
+      },
+      goalHistory: [
+        {
+          id: crypto.randomUUID(),
+          bookId: book2Id,
+          effectiveDate: daysAgo(14),
+          meta: {
+            dailyPages: 10,
+            dailyMinutes: 15,
+            weeklyPages: 60,
+            monthlyPages: 240,
+            targetDate: targetDate2,
+          },
+          created: nowIso,
+        },
+      ],
       created: nowIso,
       updated: nowIso,
     },
@@ -331,6 +379,22 @@ export async function loadSampleData(): Promise<void> {
       totalPages: 320,
       currentPage: 320,
       status: 'concluido',
+      goal: {
+        dailyPages: 20,
+        dailyMinutes: 25,
+      },
+      goalHistory: [
+        {
+          id: crypto.randomUUID(),
+          bookId: book3Id,
+          effectiveDate: daysAgo(30),
+          meta: {
+            dailyPages: 20,
+            dailyMinutes: 25,
+          },
+          created: nowIso,
+        },
+      ],
       created: nowIso,
       updated: nowIso,
     },
@@ -350,19 +414,25 @@ export async function loadSampleData(): Promise<void> {
     await idb.put(idb.STORE_LIVROS, b)
   }
 
-  // 5. Histórico de leitura dos últimos 7 dias: 12, 20, 18, 24, 8, 30, 16 páginas
-  const historyPages = [12, 20, 18, 24, 8, 30, 16]
+  // 5. Histórico de leitura dos últimos 7 dias: 15, 18, 25, 26, 25, 30, 25 páginas (atingindo a meta conjunta de 25 pág/dia)
+  const historyPages = [15, 18, 25, 26, 25, 30, 25]
   let rollingPage = 20
   for (let i = 6; i >= 0; i--) {
     const pages = historyPages[6 - i]
     rollingPage += pages
+    // Distribui entre book1 e book2 nos dias para demonstrar o cálculo
+    const isBook1 = i % 2 === 0
+    const bId = isBook1 ? book1Id : book2Id
+    const currentBookGoal = isBook1 ? sampleLivros[0].goal : sampleLivros[1].goal
+
     const hist: LeituraHistorico = {
       id: crypto.randomUUID(),
-      bookId: book1Id,
+      bookId: bId,
       dateRead: daysAgo(i),
       pagesAdded: pages,
       currentPage: rollingPage,
-      minutes: Math.round(pages * 2.2),
+      minutes: Math.round(pages * 1.5),
+      effectiveGoal: currentBookGoal,
       created: nowIso,
       updated: nowIso,
     }

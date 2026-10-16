@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { BookOpen, Plus, Flame, Search, BookMarked, SlidersHorizontal } from 'lucide-react'
+import { BookOpen, Plus, Flame, Search, BookMarked, SlidersHorizontal, Target } from 'lucide-react'
 import { Livro, ReadingGoalsProgress, BookStatus } from '@/lib/types'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
 import { useApp } from '@/lib/context'
@@ -52,9 +52,10 @@ export default function LeituraPage() {
     currentPage: number
     status: Livro['status']
     coverPhoto?: string
+    goal?: Livro['goal']
   }) => {
     await leituraRepository.saveLivro(bookData)
-    loadData()
+    await loadData()
     notifyDataChanged()
   }
 
@@ -108,12 +109,12 @@ export default function LeituraPage() {
             </Button>
           </div>
 
-          {/* GOALS STRIP (METAS DIÁRIA, SEMANAL, MENSAL + STREAK) */}
+          {/* GOALS STRIP (METAS DIÁRIA, SEMANAL, MENSAL CONSOLIDADAS + STREAK) */}
           {goals && (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#34BEAA]" /> Metas de Leitura
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#34BEAA]" /> Resumo de Leitura
                 </span>
                 {goals.streak > 0 && (
                   <span className="inline-flex items-center gap-1 text-xs font-bold text-[#F59E4C] bg-[#F59E4C]/10 px-2.5 py-0.5 rounded-full animate-fade-in">
@@ -123,67 +124,115 @@ export default function LeituraPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-2.5">
-                {/* Meta Diária */}
-                <Card className="rounded-xl border-border bg-card shadow-subtle p-3 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground font-medium">Dia</span>
-                    <span className="font-bold text-[#34BEAA]">
-                      {Math.round((goals.todayPages / goals.dailyTarget) * 100)}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-extrabold text-foreground">
-                    {goals.todayPages}{' '}
-                    <span className="text-[10px] font-normal text-muted-foreground">
-                      / {goals.dailyTarget} pág
-                    </span>
-                  </div>
-                  <Progress
-                    value={Math.min(100, (goals.todayPages / goals.dailyTarget) * 100)}
-                    className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
-                  />
-                </Card>
+              {goals.hasGoals &&
+              (goals.dailyPagesTarget > 0 ||
+                goals.dailyMinutesTarget > 0 ||
+                goals.weeklyPagesTarget > 0 ||
+                goals.weeklyMinutesTarget > 0 ||
+                goals.monthlyPagesTarget > 0 ||
+                goals.monthlyMinutesTarget > 0) ? (
+                <div className="grid grid-cols-3 gap-2.5">
+                  {/* Meta Diária Consolidada */}
+                  <Card className="rounded-xl border-border bg-card shadow-subtle p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground font-medium">Dia</span>
+                      {goals.dailyPagesTarget > 0 && (
+                        <span className="font-bold text-[#34BEAA]">
+                          {Math.round((goals.todayPages / goals.dailyPagesTarget) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-extrabold text-foreground">
+                      {goals.todayPages}{' '}
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        {goals.dailyPagesTarget > 0 ? `/ ${goals.dailyPagesTarget} pág` : 'pág'}
+                      </span>
+                    </div>
+                    {goals.dailyMinutesTarget > 0 && (
+                      <div className="text-[10px] text-muted-foreground font-medium">
+                        {goals.todayMinutes} / {goals.dailyMinutesTarget} min
+                      </div>
+                    )}
+                    {goals.dailyPagesTarget > 0 && (
+                      <Progress
+                        value={Math.min(100, (goals.todayPages / goals.dailyPagesTarget) * 100)}
+                        className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
+                      />
+                    )}
+                  </Card>
 
-                {/* Meta Semanal */}
-                <Card className="rounded-xl border-border bg-card shadow-subtle p-3 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground font-medium">Semana</span>
-                    <span className="font-bold text-[#34BEAA]">
-                      {Math.round((goals.weekPages / goals.weeklyTarget) * 100)}%
-                    </span>
-                  </div>
-                  <div className="text-sm font-extrabold text-foreground">
-                    {goals.weekPages}{' '}
-                    <span className="text-[10px] font-normal text-muted-foreground">
-                      / {goals.weeklyTarget} pág
-                    </span>
-                  </div>
-                  <Progress
-                    value={Math.min(100, (goals.weekPages / goals.weeklyTarget) * 100)}
-                    className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
-                  />
-                </Card>
+                  {/* Meta Semanal Consolidada */}
+                  <Card className="rounded-xl border-border bg-card shadow-subtle p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground font-medium">Semana</span>
+                      {goals.weeklyPagesTarget > 0 && (
+                        <span className="font-bold text-[#34BEAA]">
+                          {Math.round((goals.weekPages / goals.weeklyPagesTarget) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-extrabold text-foreground">
+                      {goals.weekPages}{' '}
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        {goals.weeklyPagesTarget > 0 ? `/ ${goals.weeklyPagesTarget} pág` : 'pág'}
+                      </span>
+                    </div>
+                    {goals.weeklyMinutesTarget > 0 && (
+                      <div className="text-[10px] text-muted-foreground font-medium">
+                        {goals.weekMinutes} / {goals.weeklyMinutesTarget} min
+                      </div>
+                    )}
+                    {goals.weeklyPagesTarget > 0 && (
+                      <Progress
+                        value={Math.min(100, (goals.weekPages / goals.weeklyPagesTarget) * 100)}
+                        className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
+                      />
+                    )}
+                  </Card>
 
-                {/* Meta Mensal */}
-                <Card className="rounded-xl border-border bg-card shadow-subtle p-3 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground font-medium">Mês</span>
-                    <span className="font-bold text-[#34BEAA]">
-                      {Math.round((goals.monthPages / goals.monthlyTarget) * 100)}%
+                  {/* Meta Mensal Consolidada */}
+                  <Card className="rounded-xl border-border bg-card shadow-subtle p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground font-medium">Mês</span>
+                      {goals.monthlyPagesTarget > 0 && (
+                        <span className="font-bold text-[#34BEAA]">
+                          {Math.round((goals.monthPages / goals.monthlyPagesTarget) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-extrabold text-foreground">
+                      {goals.monthPages}{' '}
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        {goals.monthlyPagesTarget > 0 ? `/ ${goals.monthlyPagesTarget} pág` : 'pág'}
+                      </span>
+                    </div>
+                    {goals.monthlyMinutesTarget > 0 && (
+                      <div className="text-[10px] text-muted-foreground font-medium">
+                        {goals.monthMinutes} / {goals.monthlyMinutesTarget} min
+                      </div>
+                    )}
+                    {goals.monthlyPagesTarget > 0 && (
+                      <Progress
+                        value={Math.min(100, (goals.monthPages / goals.monthlyPagesTarget) * 100)}
+                        className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
+                      />
+                    )}
+                  </Card>
+                </div>
+              ) : (
+                /* SE NENHUM LIVRO POSSUI META DEFINIDA: NÃO EXIBE NÚMEROS FICTÍCIOS */
+                <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-[#34BEAA]" />
+                    <span className="text-muted-foreground">
+                      Nenhuma meta definida nos livros em andamento.
                     </span>
                   </div>
-                  <div className="text-sm font-extrabold text-foreground">
-                    {goals.monthPages}{' '}
-                    <span className="text-[10px] font-normal text-muted-foreground">
-                      / {goals.monthlyTarget} pág
-                    </span>
-                  </div>
-                  <Progress
-                    value={Math.min(100, (goals.monthPages / goals.monthlyTarget) * 100)}
-                    className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
-                  />
-                </Card>
-              </div>
+                  <span className="text-muted-foreground font-medium">
+                    Total lido: {goals.todayPages} pág. hoje
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

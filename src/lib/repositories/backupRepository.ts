@@ -21,7 +21,7 @@ export const backupRepository = {
     const treino_log = await idb.getAll<TreinoLog>(idb.STORE_TREINO_LOG)
 
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       appName: 'Rotina',
       exportedAt: new Date().toISOString(),
       settings,
@@ -76,12 +76,18 @@ export const backupRepository = {
       await idb.clear(idb.STORE_TREINO_PLANO)
       await idb.clear(idb.STORE_TREINO_LOG)
 
-      // Grava dados das coleções
+      // Grava dados das coleções migrando livros antigos (schemaVersion 1 -> 2)
       for (const item of valid.collections.escrita_notes) {
         await idb.put(idb.STORE_ESCRITA, item)
       }
       for (const item of valid.collections.livros) {
-        await idb.put(idb.STORE_LIVROS, item)
+        // Preserva ou normaliza campos de meta
+        const migratedLivro: Livro = {
+          ...item,
+          goal: item.goal || undefined,
+          goalHistory: Array.isArray(item.goalHistory) ? item.goalHistory : [],
+        }
+        await idb.put(idb.STORE_LIVROS, migratedLivro)
       }
       for (const item of valid.collections.livro_anotacoes) {
         await idb.put(idb.STORE_LIVRO_ANOTACOES, item)

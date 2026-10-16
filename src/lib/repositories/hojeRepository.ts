@@ -71,9 +71,24 @@ export const hojeRepository = {
     }
 
     if (settings.activeModules.leitura) {
-      componentsCount++
-      const readingRatio = Math.min(1, goals.todayPages / (goals.dailyTarget || 20))
-      totalScore += readingRatio
+      // Se houver metas definidas para livros lendo, calcula ratio real. Se não tiver metas definidas, não penaliza o progresso geral
+      if (goals.hasGoals && (goals.dailyPagesTarget > 0 || goals.dailyMinutesTarget > 0)) {
+        componentsCount++
+        let readingRatio = 0
+        if (goals.dailyPagesTarget > 0) {
+          readingRatio = Math.max(
+            readingRatio,
+            Math.min(1, goals.todayPages / goals.dailyPagesTarget),
+          )
+        }
+        if (goals.dailyMinutesTarget > 0) {
+          readingRatio = Math.max(
+            readingRatio,
+            Math.min(1, goals.todayMinutes / goals.dailyMinutesTarget),
+          )
+        }
+        totalScore += readingRatio
+      }
     }
 
     if (settings.activeModules.escrita) {

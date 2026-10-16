@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Coffee,
   RotateCcw,
+  Target,
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { hojeRepository, TodayOverview } from '@/lib/repositories/hojeRepository'
@@ -19,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { QuickAddPagesModal } from '@/components/QuickAddPagesModal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 
 export default function Index() {
@@ -26,6 +28,7 @@ export default function Index() {
   const [overview, setOverview] = useState<TodayOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [readingDetailOpen, setReadingDetailOpen] = useState(false)
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -260,26 +263,37 @@ export default function Index() {
           <Card className="rounded-2xl border-border shadow-subtle overflow-hidden transition-all hover:border-[#34BEAA]/40">
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
+                <div
+                  className="flex items-center gap-2.5 cursor-pointer flex-1"
+                  onClick={() => setReadingDetailOpen(true)}
+                >
                   <div className="w-9 h-9 rounded-xl bg-[#34BEAA]/15 text-[#34BEAA] flex items-center justify-center shrink-0">
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold leading-tight">Meta de Leitura de Hoje</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {overview.reading.activeBook
-                        ? overview.reading.activeBook.title
-                        : 'Nenhum livro em andamento'}
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {overview.reading.goals.booksProgress.length > 0
+                        ? `${overview.reading.goals.booksProgress.length} ${
+                            overview.reading.goals.booksProgress.length === 1
+                              ? 'livro em andamento'
+                              : 'livros em andamento'
+                          }`
+                        : overview.reading.activeBook
+                          ? overview.reading.activeBook.title
+                          : 'Nenhum livro em andamento'}
                     </p>
                   </div>
                 </div>
 
-                {overview.reading.goals.streak > 0 && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#F59E4C] bg-[#F59E4C]/10 px-2 py-0.5 rounded-full">
-                    <Flame className="w-3.5 h-3.5 fill-[#F59E4C]" />
-                    {overview.reading.goals.streak} dias
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {overview.reading.goals.streak > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#F59E4C] bg-[#F59E4C]/10 px-2 py-0.5 rounded-full">
+                      <Flame className="w-3.5 h-3.5 fill-[#F59E4C]" />
+                      {overview.reading.goals.streak} dias
+                    </span>
+                  )}
+                </div>
               </div>
 
               {overview.reading.allBooksCount === 0 ? (
@@ -294,27 +308,117 @@ export default function Index() {
                     <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar livro
                   </Button>
                 </div>
-              ) : (
+              ) : !overview.reading.goals.hasGoals ||
+                (overview.reading.goals.dailyPagesTarget === 0 &&
+                  overview.reading.goals.dailyMinutesTarget === 0) ? (
+                /* CONVITE PARA DEFINIR META SE NENHUM LIVRO TIVER META DEFINIDA */
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-foreground">
-                      {overview.reading.goals.todayPages} / {overview.reading.goals.dailyTarget}{' '}
-                      páginas hoje
-                    </span>
-                    <span className="text-muted-foreground text-[11px]">
-                      Semana: {overview.reading.goals.weekPages}/
-                      {overview.reading.goals.weeklyTarget} pág.
-                    </span>
+                  <div className="rounded-xl bg-muted/30 border border-dashed border-border/80 p-3.5 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                      <Target className="w-4 h-4 text-[#34BEAA]" />
+                      <span>Nenhuma meta de leitura definida</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Defina metas diárias personalizadas nos seus livros para acompanhar seu
+                      progresso e construir uma sequência.
+                    </p>
+                    <div className="pt-1">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => navigate('/leitura')}
+                        className="p-0 h-auto text-xs text-[#34BEAA] font-semibold hover:underline"
+                      >
+                        Definir meta em um livro →
+                      </Button>
+                    </div>
                   </div>
 
-                  <Progress
-                    value={Math.min(
-                      100,
-                      (overview.reading.goals.todayPages / overview.reading.goals.dailyTarget) *
-                        100,
-                    )}
-                    className="h-2 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
-                  />
+                  {/* Resumo do que já foi lido hoje mesmo sem meta */}
+                  {(overview.reading.goals.todayPages > 0 ||
+                    overview.reading.goals.todayMinutes > 0) && (
+                    <div className="text-xs text-muted-foreground flex items-center justify-between px-1">
+                      <span>Lido hoje:</span>
+                      <span className="font-semibold text-foreground">
+                        {overview.reading.goals.todayPages > 0 &&
+                          `${overview.reading.goals.todayPages} páginas`}
+                        {overview.reading.goals.todayPages > 0 &&
+                          overview.reading.goals.todayMinutes > 0 &&
+                          ' e '}
+                        {overview.reading.goals.todayMinutes > 0 &&
+                          `${overview.reading.goals.todayMinutes} min`}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      onClick={() => setQuickAddOpen(true)}
+                      className="flex-1 min-h-[44px] rounded-xl bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white font-semibold text-sm shadow-sm active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />+ Páginas lidas hoje
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/leitura')}
+                      className="min-h-[44px] px-3.5 rounded-xl border-border hover:bg-muted"
+                      aria-label="Abrir biblioteca"
+                    >
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* SOMA DAS METAS DIÁRIAS DOS LIVROS COM META */
+                <div className="space-y-3">
+                  <div
+                    onClick={() => setReadingDetailOpen(true)}
+                    className="cursor-pointer space-y-1.5 group"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-foreground group-hover:text-[#34BEAA] transition-colors">
+                        {overview.reading.goals.dailyPagesTarget > 0 && (
+                          <span>
+                            {overview.reading.goals.todayPages}/
+                            {overview.reading.goals.dailyPagesTarget} páginas
+                          </span>
+                        )}
+                        {overview.reading.goals.dailyPagesTarget > 0 &&
+                          overview.reading.goals.dailyMinutesTarget > 0 && <span> e </span>}
+                        {overview.reading.goals.dailyMinutesTarget > 0 && (
+                          <span>
+                            {overview.reading.goals.todayMinutes}/
+                            {overview.reading.goals.dailyMinutesTarget} min
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-[#34BEAA] font-medium flex items-center gap-0.5">
+                        Ver detalhe <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+
+                    {/* Barra de progresso baseada em páginas (ou minutos se só tiver minutos) */}
+                    <Progress
+                      value={
+                        overview.reading.goals.dailyPagesTarget > 0
+                          ? Math.min(
+                              100,
+                              (overview.reading.goals.todayPages /
+                                overview.reading.goals.dailyPagesTarget) *
+                                100,
+                            )
+                          : overview.reading.goals.dailyMinutesTarget > 0
+                            ? Math.min(
+                                100,
+                                (overview.reading.goals.todayMinutes /
+                                  overview.reading.goals.dailyMinutesTarget) *
+                                  100,
+                              )
+                            : 0
+                      }
+                      className="h-2 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
+                    />
+                  </div>
 
                   <div className="flex gap-2 pt-1">
                     <Button
@@ -396,13 +500,111 @@ export default function Index() {
       <QuickAddPagesModal
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
-        bookId={overview?.reading.activeBook?.id}
-        bookTitle={overview?.reading.activeBook?.title}
         onSaved={() => {
           loadData()
           notifyDataChanged()
         }}
       />
+
+      {/* MODAL DE DETALHE POR LIVRO DO PROGRESSO DE HOJE */}
+      <Dialog open={readingDetailOpen} onOpenChange={setReadingDetailOpen}>
+        <DialogContent className="sm:max-w-md bg-card rounded-2xl p-6 border border-border max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="text-left space-y-1">
+            <div className="flex items-center gap-2 text-[#34BEAA]">
+              <BookOpen className="w-5 h-5" />
+              <span className="text-xs font-bold uppercase tracking-wider">Leitura de Hoje</span>
+            </div>
+            <DialogTitle className="text-xl font-bold">Progresso por Livro</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 pt-2">
+            {overview?.reading.goals.booksProgress &&
+            overview.reading.goals.booksProgress.length > 0 ? (
+              overview.reading.goals.booksProgress.map((bp) => {
+                const hasBookDailyGoal =
+                  (bp.dailyPagesTarget && bp.dailyPagesTarget > 0) ||
+                  (bp.dailyMinutesTarget && bp.dailyMinutesTarget > 0)
+
+                return (
+                  <div
+                    key={bp.book.id}
+                    onClick={() => {
+                      setReadingDetailOpen(false)
+                      navigate('/leitura')
+                    }}
+                    className="p-3.5 rounded-xl bg-muted/30 border border-border hover:bg-muted/60 transition-colors cursor-pointer space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-foreground line-clamp-1">
+                          {bp.book.title}
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground">{bp.book.author}</p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        pág. {bp.book.currentPage}
+                        {bp.book.totalPages ? ` / ${bp.book.totalPages}` : ''}
+                      </span>
+                    </div>
+
+                    {hasBookDailyGoal ? (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-foreground">
+                            {bp.dailyPagesTarget
+                              ? `${bp.todayPages}/${bp.dailyPagesTarget} pág.`
+                              : `${bp.todayPages} pág.`}
+                            {bp.dailyMinutesTarget
+                              ? ` • ${bp.todayMinutes}/${bp.dailyMinutesTarget} min`
+                              : bp.todayMinutes > 0
+                                ? ` • ${bp.todayMinutes} min`
+                                : ''}
+                          </span>
+                          {bp.dailyPagesTarget && (
+                            <span className="text-[#34BEAA] font-bold text-[11px]">
+                              {Math.round((bp.todayPages / bp.dailyPagesTarget) * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        {bp.dailyPagesTarget && (
+                          <Progress
+                            value={Math.min(100, (bp.todayPages / bp.dailyPagesTarget) * 100)}
+                            className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                        <span>Lido hoje: {bp.todayPages} pág.</span>
+                        <span className="text-[11px] text-[#34BEAA] font-medium">
+                          Sem meta diária
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Nenhum livro em andamento no momento.
+              </p>
+            )}
+
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReadingDetailOpen(false)
+                  navigate('/leitura')
+                }}
+                className="w-full h-11 rounded-xl text-xs font-semibold"
+              >
+                Gerenciar Biblioteca e Metas
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -6,11 +6,12 @@ import {
   Edit2,
   Calendar,
   Bookmark,
-  CheckCircle2,
   Clock,
   BookOpen,
+  Target,
+  Sparkles,
 } from 'lucide-react'
-import { Livro, LivroAnotacao, LeituraHistorico } from '@/lib/types'
+import { Livro, LivroAnotacao, LeituraHistorico, LivroMeta } from '@/lib/types'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -28,6 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { QuickAddPagesModal } from '@/components/QuickAddPagesModal'
+import { EditBookGoalModal } from '@/components/GoalEditorModal'
 import { useToast } from '@/hooks/use-toast'
 
 interface BookDetailViewProps {
@@ -49,6 +51,7 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
   const [anotacoes, setAnotacoes] = useState<LivroAnotacao[]>([])
   const [historico, setHistorico] = useState<LeituraHistorico[]>([])
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [goalModalOpen, setGoalModalOpen] = useState(false)
   const [noteModalOpen, setNoteModalOpen] = useState(false)
   const [deleteBookDialogOpen, setDeleteBookDialogOpen] = useState(false)
 
@@ -135,11 +138,60 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
     onUpdated()
   }
 
+  const handleSaveGoal = async (meta?: LivroMeta) => {
+    await leituraRepository.updateLivroMeta(bookId, meta)
+    toast({
+      title: meta ? 'Meta atualizada!' : 'Meta removida',
+      description: meta
+        ? 'As metas deste livro foram salvas com sucesso.'
+        : 'O livro agora opera sem metas de leitura.',
+    })
+    await loadData()
+    onUpdated()
+  }
+
   if (!book) return null
 
   const progressPercent = book.totalPages
     ? Math.min(100, Math.round((book.currentPage / book.totalPages) * 100))
     : 0
+
+  // Progresso de hoje, semana e mês deste livro específico
+  const todayStr = new Date().toISOString().split('T')[0]
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0]
+
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
+
+  const todayEntries = historico.filter((h) => h.dateRead === todayStr)
+  const weekEntries = historico.filter(
+    (h) => h.dateRead >= sevenDaysAgoStr && h.dateRead <= todayStr,
+  )
+  const monthEntries = historico.filter(
+    (h) => h.dateRead >= thirtyDaysAgoStr && h.dateRead <= todayStr,
+  )
+
+  const todayBookPages = todayEntries.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+  const todayBookMinutes = todayEntries.reduce((s, h) => s + (h.minutes || 0), 0)
+  const weekBookPages = weekEntries.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+  const weekBookMinutes = weekEntries.reduce((s, h) => s + (h.minutes || 0), 0)
+  const monthBookPages = monthEntries.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+  const monthBookMinutes = monthEntries.reduce((s, h) => s + (h.minutes || 0), 0)
+
+  const goal = book.goal
+  const hasGoal = Boolean(
+    goal &&
+    (goal.dailyPages ||
+      goal.dailyMinutes ||
+      goal.weeklyPages ||
+      goal.weeklyMinutes ||
+      goal.monthlyPages ||
+      goal.monthlyMinutes ||
+      goal.targetDate),
+  )
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -230,15 +282,159 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
           </div>
 
           {/* BOTÃO PRINCIPAL DE AÇÃO */}
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap gap-2.5">
             <Button
               onClick={() => setQuickAddOpen(true)}
-              className="w-full sm:w-auto min-h-[44px] px-6 rounded-xl bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white font-semibold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="flex-1 sm:flex-initial min-h-[44px] px-6 rounded-xl bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white font-semibold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              <Plus className="w-4 h-4" /> + Páginas lidas hoje
+              <Plus className="w-4 h-4" /> + Registrar leitura hoje
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setGoalModalOpen(true)}
+              className="min-h-[44px] px-4 rounded-xl border-border text-foreground text-xs font-semibold hover:bg-muted flex items-center gap-1.5"
+            >
+              <Target className="w-4 h-4 text-[#34BEAA]" />
+              {hasGoal ? 'Editar meta' : 'Definir meta'}
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* SEÇÃO: PROGRESSO DAS METAS DESTE LIVRO (SEMANAL E MENSAL POR LIVRO) */}
+      <div className="p-4 rounded-2xl bg-card border border-border shadow-subtle space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-[#34BEAA]" />
+            <h3 className="text-sm font-bold text-foreground">Metas e Progresso do Livro</h3>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setGoalModalOpen(true)}
+            className="text-xs h-8 text-[#34BEAA] hover:bg-[#34BEAA]/10 font-semibold"
+          >
+            {hasGoal ? 'Alterar meta' : '+ Adicionar meta'}
+          </Button>
+        </div>
+
+        {hasGoal ? (
+          <div className="space-y-3">
+            {/* Cards de progresso do livro: Hoje, Semana, Mês */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              {/* Hoje */}
+              <div className="p-3 rounded-xl bg-muted/30 border border-border space-y-1.5">
+                <div className="flex items-center justify-between text-muted-foreground font-medium">
+                  <span>Hoje</span>
+                  {goal?.dailyPages && (
+                    <span className="font-bold text-[#34BEAA]">
+                      {Math.round((todayBookPages / goal.dailyPages) * 100)}%
+                    </span>
+                  )}
+                </div>
+                <div className="font-bold text-foreground">
+                  {todayBookPages}
+                  {goal?.dailyPages ? ` / ${goal.dailyPages} pág.` : ' pág.'}
+                </div>
+                {goal?.dailyMinutes && (
+                  <div className="text-[11px] text-muted-foreground">
+                    {todayBookMinutes} / {goal.dailyMinutes} min
+                  </div>
+                )}
+                {goal?.dailyPages && (
+                  <Progress
+                    value={Math.min(100, (todayBookPages / goal.dailyPages) * 100)}
+                    className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full mt-1"
+                  />
+                )}
+              </div>
+
+              {/* Semana */}
+              <div className="p-3 rounded-xl bg-muted/30 border border-border space-y-1.5">
+                <div className="flex items-center justify-between text-muted-foreground font-medium">
+                  <span>Semana (7 dias)</span>
+                  {goal?.weeklyPages && (
+                    <span className="font-bold text-[#34BEAA]">
+                      {Math.round((weekBookPages / goal.weeklyPages) * 100)}%
+                    </span>
+                  )}
+                </div>
+                <div className="font-bold text-foreground">
+                  {weekBookPages}
+                  {goal?.weeklyPages ? ` / ${goal.weeklyPages} pág.` : ' pág.'}
+                </div>
+                {goal?.weeklyMinutes && (
+                  <div className="text-[11px] text-muted-foreground">
+                    {weekBookMinutes} / {goal.weeklyMinutes} min
+                  </div>
+                )}
+                {goal?.weeklyPages && (
+                  <Progress
+                    value={Math.min(100, (weekBookPages / goal.weeklyPages) * 100)}
+                    className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full mt-1"
+                  />
+                )}
+              </div>
+
+              {/* Mês */}
+              <div className="p-3 rounded-xl bg-muted/30 border border-border space-y-1.5">
+                <div className="flex items-center justify-between text-muted-foreground font-medium">
+                  <span>Mês (30 dias)</span>
+                  {goal?.monthlyPages && (
+                    <span className="font-bold text-[#34BEAA]">
+                      {Math.round((monthBookPages / goal.monthlyPages) * 100)}%
+                    </span>
+                  )}
+                </div>
+                <div className="font-bold text-foreground">
+                  {monthBookPages}
+                  {goal?.monthlyPages ? ` / ${goal.monthlyPages} pág.` : ' pág.'}
+                </div>
+                {goal?.monthlyMinutes && (
+                  <div className="text-[11px] text-muted-foreground">
+                    {monthBookMinutes} / {goal.monthlyMinutes} min
+                  </div>
+                )}
+                {goal?.monthlyPages && (
+                  <Progress
+                    value={Math.min(100, (monthBookPages / goal.monthlyPages) * 100)}
+                    className="h-1.5 bg-muted [&>div]:bg-[#34BEAA] rounded-full mt-1"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Data-alvo do livro */}
+            {goal?.targetDate && (
+              <div className="p-2.5 rounded-xl bg-[#34BEAA]/10 border border-[#34BEAA]/20 flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-foreground font-medium">
+                  <Calendar className="w-3.5 h-3.5 text-[#34BEAA]" /> Terminar até:{' '}
+                  {new Date(goal.targetDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>
+                {book.totalPages && book.totalPages > book.currentPage && (
+                  <span className="text-[11px] text-muted-foreground font-medium">
+                    Restam {book.totalPages - book.currentPage} páginas
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-muted/20 border border-dashed border-border text-center space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Nenhuma meta definida para este livro. Você pode ler no seu ritmo ou estipular metas
+              diárias, semanais, mensais e data-alvo.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setGoalModalOpen(true)}
+              className="text-xs h-8 rounded-lg border-[#34BEAA]/40 text-[#34BEAA] hover:bg-[#34BEAA]/10"
+            >
+              Definir meta para este livro
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* SEÇÃO: ANOTAÇÕES DO LIVRO */}
@@ -321,11 +517,18 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
             {historico.map((h) => (
               <div
                 key={h.id}
-                className="p-3 rounded-xl bg-card border border-border flex items-center justify-between text-xs shadow-subtle"
+                className="p-3 rounded-xl bg-card border border-border flex items-center justify-between text-xs shadow-subtle gap-2"
               >
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">+{h.pagesAdded} páginas</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {h.pagesAdded > 0 && (
+                      <span className="font-semibold text-foreground">+{h.pagesAdded} páginas</span>
+                    )}
+                    {h.minutes !== undefined && h.minutes > 0 && (
+                      <span className="text-[11px] text-[#34BEAA] font-bold">
+                        ({h.minutes} min)
+                      </span>
+                    )}
                     <span className="text-muted-foreground">→ pág. {h.currentPage}</span>
                   </div>
                   <span className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -337,7 +540,7 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={() => handleDeleteHistoryEntry(h.id)}
-                  className="h-8 text-[11px] text-destructive hover:bg-destructive/10"
+                  className="h-8 text-[11px] text-destructive hover:bg-destructive/10 shrink-0"
                 >
                   Excluir registro
                 </Button>
@@ -352,11 +555,21 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
         bookId={book.id}
-        bookTitle={book.title}
         onSaved={() => {
           loadData()
           onUpdated()
         }}
+      />
+
+      {/* MODAL DE EDIÇÃO DE META DESTE LIVRO */}
+      <EditBookGoalModal
+        open={goalModalOpen}
+        onClose={() => setGoalModalOpen(false)}
+        bookTitle={book.title}
+        totalPages={book.totalPages}
+        currentPage={book.currentPage}
+        currentGoal={book.goal}
+        onSave={handleSaveGoal}
       />
 
       {/* MODAL DE ANOTAÇÃO */}

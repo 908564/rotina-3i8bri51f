@@ -8,10 +8,19 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Camera, Image as ImageIcon, Trash2, BookOpen } from 'lucide-react'
-import { Livro } from '@/lib/types'
+import {
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  BookOpen,
+  Target,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
+import { Livro, LivroMeta } from '@/lib/types'
 import { compressBookCover } from '@/lib/imageCompressor'
 import { useToast } from '@/hooks/use-toast'
+import { GoalEditorFields } from './GoalEditorModal'
 
 interface BookFormModalProps {
   open: boolean
@@ -25,6 +34,7 @@ interface BookFormModalProps {
     currentPage: number
     status: Livro['status']
     coverPhoto?: string
+    goal?: LivroMeta
   }) => Promise<void>
 }
 
@@ -40,6 +50,8 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
   const [currentPage, setCurrentPage] = useState<string>('0')
   const [status, setStatus] = useState<Livro['status']>('quero_ler')
   const [coverPhoto, setCoverPhoto] = useState<string | undefined>(undefined)
+  const [goal, setGoal] = useState<LivroMeta>({})
+  const [showGoalSection, setShowGoalSection] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -55,6 +67,8 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
       setCurrentPage(String(editingBook.currentPage || 0))
       setStatus(editingBook.status)
       setCoverPhoto(editingBook.coverPhoto)
+      setGoal(editingBook.goal || {})
+      setShowGoalSection(Boolean(editingBook.goal && Object.keys(editingBook.goal).length > 0))
     } else {
       setTitle('')
       setAuthor('')
@@ -62,6 +76,8 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
       setCurrentPage('0')
       setStatus('quero_ler')
       setCoverPhoto(undefined)
+      setGoal({})
+      setShowGoalSection(false)
     }
     setErrors({})
   }, [editingBook, open])
@@ -108,6 +124,18 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
       return
     }
 
+    // Limpa chaves vazias da meta
+    const cleanedGoal: LivroMeta = {}
+    if (goal.dailyPages && goal.dailyPages > 0) cleanedGoal.dailyPages = goal.dailyPages
+    if (goal.dailyMinutes && goal.dailyMinutes > 0) cleanedGoal.dailyMinutes = goal.dailyMinutes
+    if (goal.weeklyPages && goal.weeklyPages > 0) cleanedGoal.weeklyPages = goal.weeklyPages
+    if (goal.weeklyMinutes && goal.weeklyMinutes > 0) cleanedGoal.weeklyMinutes = goal.weeklyMinutes
+    if (goal.monthlyPages && goal.monthlyPages > 0) cleanedGoal.monthlyPages = goal.monthlyPages
+    if (goal.monthlyMinutes && goal.monthlyMinutes > 0)
+      cleanedGoal.monthlyMinutes = goal.monthlyMinutes
+    if (goal.targetDate) cleanedGoal.targetDate = goal.targetDate
+    const finalGoal = Object.keys(cleanedGoal).length > 0 ? cleanedGoal : undefined
+
     setSubmitting(true)
     try {
       await onSave({
@@ -118,6 +146,7 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
         currentPage: parsedCurrent,
         status,
         coverPhoto,
+        goal: finalGoal,
       })
       onClose()
     } catch {
@@ -284,6 +313,41 @@ export const BookFormModal: React.FC<BookFormModalProps> = ({
                 <p className="text-[11px] text-destructive italic">{errors.currentPage}</p>
               )}
             </div>
+          </div>
+
+          {/* SEÇÃO OPCIONAL: METAS DE LEITURA DO LIVRO */}
+          <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowGoalSection(!showGoalSection)}
+              className="w-full p-3.5 flex items-center justify-between text-left hover:bg-muted/40 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-[#34BEAA]" />
+                <div>
+                  <span className="text-xs font-bold text-foreground">Meta de leitura</span>
+                  <span className="ml-1.5 text-[10px] text-muted-foreground uppercase font-medium">
+                    Opcional
+                  </span>
+                </div>
+              </div>
+              {showGoalSection ? (
+                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
+
+            {showGoalSection && (
+              <div className="p-4 pt-1 border-t border-border/60">
+                <GoalEditorFields
+                  goal={goal}
+                  totalPages={totalPages ? parseInt(totalPages) : undefined}
+                  currentPage={currentPage ? parseInt(currentPage) : 0}
+                  onChange={setGoal}
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-3">

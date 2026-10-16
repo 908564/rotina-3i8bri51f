@@ -1,5 +1,43 @@
 import { idb } from '../indexedDb'
-import { Livro, LivroAnotacao, LeituraHistorico, ReadingGoalsProgress } from '../types'
+import {
+  Livro,
+  LivroMeta,
+  LivroMetaHistorico,
+  LivroAnotacao,
+  LeituraHistorico,
+  ReadingGoalsProgress,
+  BookGoalProgress,
+} from '../types'
+
+// Helper para obter meta vigente de um livro em uma determinada data (YYYY-MM-DD)
+export function getBookGoalForDate(book: Livro, targetDate: string): LivroMeta | undefined {
+  if (!book.goalHistory || book.goalHistory.length === 0) {
+    return book.goal
+  }
+
+  // Ordena por effectiveDate ascendente
+  const sorted = [...book.goalHistory].sort((a, b) =>
+    a.effectiveDate.localeCompare(b.effectiveDate),
+  )
+
+  // Encontra a última alteração com effectiveDate <= targetDate
+  let matched: LivroMeta | undefined = undefined
+  for (const entry of sorted) {
+    if (entry.effectiveDate <= targetDate) {
+      matched = entry.meta
+    } else {
+      break
+    }
+  }
+
+  // Se a primeira alteração foi depois da targetDate, mas o livro tem goal, ou antes
+  if (matched !== undefined) {
+    return matched
+  }
+
+  // Se não achou nenhuma com effectiveDate <= targetDate, usa a mais antiga registrada ou a atual
+  return sorted[0]?.meta || book.goal
+}
 
 export const leituraRepository = {
   // Livros
@@ -16,6 +54,7 @@ export const leituraRepository = {
     data: Omit<Livro, 'id' | 'created' | 'updated'> & { id?: string },
   ): Promise<Livro> {
     const now = new Date().toISOString()
+    const today = now.split('T')[0]
     let existing: Livro | undefined
     if (data.id) {
       existing = await this.getLivroById(data.id)
@@ -30,20 +69,86 @@ export const leituraRepository = {
       status = 'lendo'
     }
 
+    // Gerenciar histórico de metas caso a meta tenha sido informada ou alterada
+    let goalHistory = existing?.goalHistory ? [...existing.goalHistory] : []
+    const newGoal = data.goal
+
+    if (newGoal) {
+      // Checar se mudou em relação à meta anterior
+      const prevGoal = existing?.goal
+      const hasChanged =
+        !prevGoal ||
+        prevGoal.dailyPages !== newGoal.dailyPages ||
+        prevGoal.dailyMinutes !== newGoal.dailyMinutes ||
+        prevGoal.weeklyPages !== newGoal.weeklyPages ||
+        prevGoal.weeklyMinutes !== newGoal.weeklyMinutes ||
+        prevGoal.monthlyPages !== newGoal.monthlyPages ||
+        prevGoal.monthlyMinutes !== newGoal.monthlyMinutes ||
+        prevGoal.targetDate !== newGoal.targetDate
+
+      if (hasChanged) {
+        const historyEntry: LivroMetaHistorico = {
+          id: crypto.randomUUID(),
+          bookId: data.id || '',
+          effectiveDate: today,
+          meta: { ...newGoal },
+          created: now,
+        }
+        goalHistory.push(historyEntry)
+      }
+    }
+
+    const livroId = data.id || crypto.randomUUID()
+    // Atualiza bookId nas entradas do histórico caso seja um livro novo
+    goalHistory = goalHistory.map((gh) => ({ ...gh, bookId: livroId }))
+
     const livro: Livro = {
-      id: data.id || crypto.randomUUID(),
+      id: livroId,
       title: data.title.trim(),
       author: data.author.trim(),
       totalPages: data.totalPages ? Number(data.totalPages) : undefined,
       currentPage: Math.max(0, Number(data.currentPage) || 0),
       status: status || 'quero_ler',
       coverPhoto: data.coverPhoto,
+      goal: data.goal,
+      goalHistory,
       created: existing ? existing.created : now,
       updated: now,
     }
 
     await idb.put(idb.STORE_LIVROS, livro)
     return livro
+  },
+
+  async updateLivroMeta(bookId: string, meta?: LivroMeta): Promise<Livro> {
+    const livro = await this.getLivroById(bookId)
+    if (!livro) throw new Error('Livro não encontrado')
+
+    const now = new Date().toISOString()
+    const today = now.split('T')[0]
+
+    const goalHistory = livro.goalHistory ? [...livro.goalHistory] : []
+
+    if (meta) {
+      const historyEntry: LivroMetaHistorico = {
+        id: crypto.randomUUID(),
+        bookId,
+        effectiveDate: today,
+        meta: { ...meta },
+        created: now,
+      }
+      goalHistory.push(historyEntry)
+    }
+
+    const updatedLivro: Livro = {
+      ...livro,
+      goal: meta,
+      goalHistory,
+      updated: now,
+    }
+
+    await idb.put(idb.STORE_LIVROS, updatedLivro)
+    return updatedLivro
   },
 
   async deleteLivro(id: string): Promise<void> {
@@ -107,19 +212,29 @@ export const leituraRepository = {
 
   async addReadingSession(params: {
     bookId: string
-    pagesAdded: number
-    dateRead?: string
+    pagesAdded?: number
     minutes?: number
+    dateRead?: string
   }): Promise<{ history: LeituraHistorico; book: Livro }> {
     const livro = await this.getLivroById(params.bookId)
     if (!livro) throw new Error('Livro não encontrado')
 
-    const pagesAdded = Math.max(1, Number(params.pagesAdded))
+    const pagesAdded = Math.max(0, Number(params.pagesAdded) || 0)
+    const minutes =
+      params.minutes !== undefined ? Math.max(0, Number(params.minutes) || 0) : undefined
+
+    if (pagesAdded === 0 && (!minutes || minutes === 0)) {
+      throw new Error('Informe ao menos páginas lidas ou minutos.')
+    }
+
     const newCurrentPage = livro.currentPage + pagesAdded
     const finalPage = livro.totalPages ? Math.min(livro.totalPages, newCurrentPage) : newCurrentPage
 
     const now = new Date()
     const dateStr = params.dateRead || now.toISOString().split('T')[0]
+
+    // Salva a meta vigente do livro nesta data
+    const effectiveGoal = getBookGoalForDate(livro, dateStr)
 
     const historyEntry: LeituraHistorico = {
       id: crypto.randomUUID(),
@@ -127,7 +242,8 @@ export const leituraRepository = {
       dateRead: dateStr,
       pagesAdded,
       currentPage: finalPage,
-      minutes: params.minutes,
+      minutes,
+      effectiveGoal,
       created: now.toISOString(),
       updated: now.toISOString(),
     }
@@ -181,70 +297,265 @@ export const leituraRepository = {
     }
   },
 
-  // Metas (20 pág/dia, 100 pág/semana, 430 pág/mês) e Streak
+  // Metas dinâmicas consolidadas e por livro
   async getGoalsProgress(): Promise<ReadingGoalsProgress> {
+    const allBooks = await this.getLivros()
     const allHistory = await this.getAllHistorico()
     const today = new Date().toISOString().split('T')[0]
 
-    // Páginas de hoje
-    const todayPages = allHistory
-      .filter((h) => h.dateRead === today)
-      .reduce((sum, h) => sum + (h.pagesAdded || 0), 0)
-
-    // Janela de 7 dias (semana móvel)
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
     const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0]
 
-    const weekPages = allHistory
-      .filter((h) => h.dateRead >= sevenDaysAgoStr && h.dateRead <= today)
-      .reduce((sum, h) => sum + (h.pagesAdded || 0), 0)
-
-    // Janela de 30 dias (mês móvel)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
 
-    const monthPages = allHistory
-      .filter((h) => h.dateRead >= thirtyDaysAgoStr && h.dateRead <= today)
-      .reduce((sum, h) => sum + (h.pagesAdded || 0), 0)
+    // Livros com status 'lendo'
+    const readingBooks = allBooks.filter((b) => b.status === 'lendo')
 
-    // Calcular streak (dias consecutivos atingindo meta diária de 20 páginas)
-    const pagesByDate: Record<string, number> = {}
-    allHistory.forEach((h) => {
-      pagesByDate[h.dateRead] = (pagesByDate[h.dateRead] || 0) + (h.pagesAdded || 0)
+    // Mapa de livros por id para consulta rápida
+    const booksById = new Map<string, Livro>()
+    allBooks.forEach((b) => booksById.set(b.id, b))
+
+    // Progresso individual por livro
+    const booksProgress: BookGoalProgress[] = readingBooks.map((book) => {
+      const bookHistory = allHistory.filter((h) => h.bookId === book.id)
+
+      const todayEntries = bookHistory.filter((h) => h.dateRead === today)
+      const weekEntries = bookHistory.filter(
+        (h) => h.dateRead >= sevenDaysAgoStr && h.dateRead <= today,
+      )
+      const monthEntries = bookHistory.filter(
+        (h) => h.dateRead >= thirtyDaysAgoStr && h.dateRead <= today,
+      )
+
+      const todayP = todayEntries.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+      const todayM = todayEntries.reduce((s, h) => s + (h.minutes || 0), 0)
+
+      const weekP = weekEntries.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+      const weekM = weekEntries.reduce((s, h) => s + (h.minutes || 0), 0)
+
+      const monthP = monthEntries.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+      const monthM = monthEntries.reduce((s, h) => s + (h.minutes || 0), 0)
+
+      const goal = book.goal
+      const hasAnyGoal = Boolean(
+        goal &&
+        (goal.dailyPages ||
+          goal.dailyMinutes ||
+          goal.weeklyPages ||
+          goal.weeklyMinutes ||
+          goal.monthlyPages ||
+          goal.monthlyMinutes),
+      )
+
+      return {
+        book,
+        dailyPagesTarget: goal?.dailyPages,
+        dailyMinutesTarget: goal?.dailyMinutes,
+        todayPages: todayP,
+        todayMinutes: todayM,
+        weeklyPagesTarget: goal?.weeklyPages,
+        weeklyMinutesTarget: goal?.weeklyMinutes,
+        weekPages: weekP,
+        weekMinutes: weekM,
+        monthlyPagesTarget: goal?.monthlyPages,
+        monthlyMinutesTarget: goal?.monthlyMinutes,
+        monthPages: monthP,
+        monthMinutes: monthM,
+        hasAnyGoal,
+      }
     })
+
+    // Totais consolidados apenas dos livros "lendo"
+    let dailyPagesTarget = 0
+    let dailyMinutesTarget = 0
+    let weeklyPagesTarget = 0
+    let weeklyMinutesTarget = 0
+    let monthlyPagesTarget = 0
+    let monthlyMinutesTarget = 0
+
+    let hasAnyDefinedGoal = false
+
+    readingBooks.forEach((book) => {
+      if (book.goal) {
+        if (book.goal.dailyPages) {
+          dailyPagesTarget += book.goal.dailyPages
+          hasAnyDefinedGoal = true
+        }
+        if (book.goal.dailyMinutes) {
+          dailyMinutesTarget += book.goal.dailyMinutes
+          hasAnyDefinedGoal = true
+        }
+        if (book.goal.weeklyPages) {
+          weeklyPagesTarget += book.goal.weeklyPages
+          hasAnyDefinedGoal = true
+        }
+        if (book.goal.weeklyMinutes) {
+          weeklyMinutesTarget += book.goal.weeklyMinutes
+          hasAnyDefinedGoal = true
+        }
+        if (book.goal.monthlyPages) {
+          monthlyPagesTarget += book.goal.monthlyPages
+          hasAnyDefinedGoal = true
+        }
+        if (book.goal.monthlyMinutes) {
+          monthlyMinutesTarget += book.goal.monthlyMinutes
+          hasAnyDefinedGoal = true
+        }
+      }
+    })
+
+    // Páginas e minutos totais lidos hoje, semana e mês (entre os livros "lendo" ou gerais)
+    // O progresso de leitura deve contabilizar todos os registros de livros ativos
+    const todayPages = booksProgress.reduce((s, bp) => s + bp.todayPages, 0)
+    const todayMinutes = booksProgress.reduce((s, bp) => s + bp.todayMinutes, 0)
+    const weekPages = booksProgress.reduce((s, bp) => s + bp.weekPages, 0)
+    const weekMinutes = booksProgress.reduce((s, bp) => s + bp.weekMinutes, 0)
+    const monthPages = booksProgress.reduce((s, bp) => s + bp.monthPages, 0)
+    const monthMinutes = booksProgress.reduce((s, bp) => s + bp.monthMinutes, 0)
+
+    // ==========================================
+    // CÁLCULO DO STREAK (SEQUÊNCIA DE DIAS)
+    // ==========================================
+    // Regra:
+    // A sequência de dias seguidos (streak) conta os dias em que a meta diária total
+    // (soma dos livros "lendo" que têm meta) foi atingida.
+    // Dias sem nenhum livro com meta não quebram nem aumentam a sequência.
+    // Se a meta de um livro for alterada, o histórico dos dias passados NÃO deve ser recalculado:
+    // cada dia mantém a meta que estava valendo naquela data.
+    // Agrupamos registros por data:
+    const historyByDate: Record<string, LeituraHistorico[]> = {}
+    allHistory.forEach((h) => {
+      if (!historyByDate[h.dateRead]) historyByDate[h.dateRead] = []
+      historyByDate[h.dateRead].push(h)
+    })
+
+    // Função para calcular a meta vigente no dia dStr
+    // e se o dia atingiu a meta ou se é neutro (sem metas)
+    const evaluateDayGoal = (dStr: string): { hasTarget: boolean; isMet: boolean } => {
+      // Para o dia em questão, quais eram as metas diárias vigentes dos livros que estavam em leitura?
+      // Usamos a meta gravada no histórico do dia (se houver) OU consultamos getBookGoalForDate(livro, dStr).
+      // Livros concluídos antes da data ou não lendo:
+      // Consideramos os livros que possuem histórico ou que estão ativos.
+      // Mais precisamente: para cada livro que estava ativo ou teve leitura nesse dia, pegamos a meta válida em dStr.
+      // Se houver livros atualmente 'lendo' ou livros com effectiveGoal naquele dia:
+      let targetPages = 0
+      let targetMinutes = 0
+      let hadAnyTarget = false
+
+      // Livros 'lendo' atualmente:
+      for (const book of readingBooks) {
+        const goalAtDate = getBookGoalForDate(book, dStr)
+        if (goalAtDate?.dailyPages) {
+          targetPages += goalAtDate.dailyPages
+          hadAnyTarget = true
+        }
+        if (goalAtDate?.dailyMinutes) {
+          targetMinutes += goalAtDate.dailyMinutes
+          hadAnyTarget = true
+        }
+      }
+
+      // Se nenhum livro lendo tinha meta em dStr, checamos os effectiveGoals registrados no histórico desse dia
+      const dayRecords = historyByDate[dStr] || []
+      if (!hadAnyTarget && dayRecords.length > 0) {
+        for (const rec of dayRecords) {
+          if (rec.effectiveGoal?.dailyPages) {
+            targetPages += rec.effectiveGoal.dailyPages
+            hadAnyTarget = true
+          }
+          if (rec.effectiveGoal?.dailyMinutes) {
+            targetMinutes += rec.effectiveGoal.dailyMinutes
+            hadAnyTarget = true
+          }
+        }
+      }
+
+      if (!hadAnyTarget) {
+        return { hasTarget: false, isMet: false }
+      }
+
+      const totalReadPages = dayRecords.reduce((s, r) => s + (r.pagesAdded || 0), 0)
+      const totalReadMinutes = dayRecords.reduce((s, r) => s + (r.minutes || 0), 0)
+
+      // Se tem meta de páginas E minutos, ou apenas páginas, ou apenas minutos:
+      // O critério de cumprimento diário:
+      // Se tiver meta de páginas, atingiu páginas? Se tiver minutos, atingiu minutos?
+      // Se tiver ambas, o usuário cumpre atingindo páginas OU minutos (ou ambas se ambas definidas e atingidas).
+      // Na prática habitual: se tiver meta de pág e/ou min, cumpre se totalReadPages >= targetPages (se targetPages > 0)
+      // OU totalReadMinutes >= targetMinutes (se targetMinutes > 0).
+      let met = true
+      if (targetPages > 0 && totalReadPages < targetPages) {
+        // Se também tinha meta de minutos e atingiu minutos, considera atingida a meta diária
+        if (targetMinutes > 0 && totalReadMinutes >= targetMinutes) {
+          met = true
+        } else {
+          met = false
+        }
+      } else if (targetMinutes > 0 && totalReadMinutes < targetMinutes) {
+        if (targetPages > 0 && totalReadPages >= targetPages) {
+          met = true
+        } else {
+          met = false
+        }
+      }
+
+      return { hasTarget: true, isMet: met }
+    }
 
     let streak = 0
     const cursor = new Date()
-    // Checar hoje: se hoje atingiu a meta, conta hoje. Se ainda não atingiu mas ontem atingiu, começa a contar de ontem
-    const todayMet = (pagesByDate[today] || 0) >= 20
-    if (todayMet) {
+
+    // Avalia o dia de hoje
+    const todayEval = evaluateDayGoal(today)
+    if (todayEval.hasTarget && todayEval.isMet) {
       streak++
       cursor.setDate(cursor.getDate() - 1)
     } else {
-      // Começar a checar de ontem
+      // Se hoje ainda não atingiu ou não tem meta, começamos a checar a partir de ontem
       cursor.setDate(cursor.getDate() - 1)
     }
 
-    while (true) {
+    // Varre para trás até 365 dias
+    let daysChecked = 0
+    while (daysChecked < 365) {
+      daysChecked++
       const dStr = cursor.toISOString().split('T')[0]
-      if ((pagesByDate[dStr] || 0) >= 20) {
+      const dayEval = evaluateDayGoal(dStr)
+
+      if (!dayEval.hasTarget) {
+        // "Dias sem nenhum livro com meta não quebram nem aumentam a sequência."
+        cursor.setDate(cursor.getDate() - 1)
+        continue
+      }
+
+      if (dayEval.isMet) {
         streak++
         cursor.setDate(cursor.getDate() - 1)
       } else {
+        // Quebrou a sequência
         break
       }
     }
 
     return {
-      dailyTarget: 20,
-      weeklyTarget: 100,
-      monthlyTarget: 430,
+      hasGoals: hasAnyDefinedGoal,
+      dailyPagesTarget,
+      dailyMinutesTarget,
       todayPages,
+      todayMinutes,
+      weeklyPagesTarget,
+      weeklyMinutesTarget,
       weekPages,
+      weekMinutes,
+      monthlyPagesTarget,
+      monthlyMinutesTarget,
       monthPages,
+      monthMinutes,
       streak,
+      booksProgress,
     }
   },
 }
