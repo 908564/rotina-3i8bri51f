@@ -183,23 +183,54 @@ export function notifyQuotaExceeded(): void {
 async function putInStore<T>(storeName: string, value: T): Promise<void> {
   const db = await getDB()
   return new Promise((resolve, reject) => {
+    let resolved = false
     const tx = db.transaction(storeName, 'readwrite')
     const store = tx.objectStore(storeName)
     const request = store.put(value)
-    request.onsuccess = () => resolve()
+
     request.onerror = () => {
       const err = request.error || tx.error
       if (isQuotaExceededError(err)) {
         notifyQuotaExceeded()
       }
-      reject(err)
+      try {
+        tx.abort()
+      } catch {
+        // Ignora se já estiver inativa
+      }
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
     }
+
+    tx.oncomplete = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+
     tx.onerror = () => {
       const err = tx.error || request.error
       if (isQuotaExceededError(err)) {
         notifyQuotaExceeded()
       }
-      reject(err)
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    tx.onabort = () => {
+      const err = tx.error || new Error('Transação abortada')
+      if (isQuotaExceededError(err)) {
+        notifyQuotaExceeded()
+      }
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
     }
   })
 }
@@ -207,22 +238,92 @@ async function putInStore<T>(storeName: string, value: T): Promise<void> {
 async function deleteFromStore(storeName: string, key: IDBValidKey): Promise<void> {
   const db = await getDB()
   return new Promise((resolve, reject) => {
+    let resolved = false
     const tx = db.transaction(storeName, 'readwrite')
     const store = tx.objectStore(storeName)
     const request = store.delete(key)
-    request.onsuccess = () => resolve()
-    request.onerror = () => reject(request.error)
+
+    request.onerror = () => {
+      const err = request.error || tx.error
+      try {
+        tx.abort()
+      } catch {
+        // Ignora
+      }
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    tx.oncomplete = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+
+    tx.onerror = () => {
+      const err = tx.error || request.error
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    tx.onabort = () => {
+      const err = tx.error || new Error('Transação abortada')
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
   })
 }
 
 async function clearStore(storeName: string): Promise<void> {
   const db = await getDB()
   return new Promise((resolve, reject) => {
+    let resolved = false
     const tx = db.transaction(storeName, 'readwrite')
     const store = tx.objectStore(storeName)
     const request = store.clear()
-    request.onsuccess = () => resolve()
-    request.onerror = () => reject(request.error)
+
+    request.onerror = () => {
+      const err = request.error || tx.error
+      try {
+        tx.abort()
+      } catch {
+        // Ignora
+      }
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    tx.oncomplete = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+
+    tx.onerror = () => {
+      const err = tx.error || request.error
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    tx.onabort = () => {
+      const err = tx.error || new Error('Transação abortada')
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
   })
 }
 

@@ -137,6 +137,13 @@ export const StudyBlockEditor: React.FC<StudyBlockEditorProps> = ({
   )
 
   // Autosave com debounce de 600ms após qualquer alteração
+  const titleRef = useRef(title)
+  const blocksRef = useRef(blocks)
+  const isDirtyRef = useRef(isDirty)
+  titleRef.current = title
+  blocksRef.current = blocks
+  isDirtyRef.current = isDirty
+
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
@@ -153,19 +160,27 @@ export const StudyBlockEditor: React.FC<StudyBlockEditorProps> = ({
       performSave()
     }, 600)
 
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    }
+    // Nota: NÃO limpar o timer no cleanup para evitar cancelamento por re-renders espúrios
   }, [title, blocks, isDirty, performSave])
 
-  // Desmonte salva se ainda estiver pendente
+  // Salvar no desmonte ou fechar/trocar aba
   useEffect(() => {
-    return () => {
-      if (isDirty) {
-        performSave()
+    const handleVis = () => {
+      if (document.visibilityState === 'hidden' && isDirtyRef.current) {
+        performSave(titleRef.current, blocksRef.current)
       }
     }
-  }, [isDirty, performSave])
+    document.addEventListener('visibilitychange', handleVis)
+    window.addEventListener('pagehide', handleVis)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVis)
+      window.removeEventListener('pagehide', handleVis)
+      if (isDirtyRef.current) {
+        performSave(titleRef.current, blocksRef.current)
+      }
+    }
+  }, [performSave])
 
   const handleTitleChange = (val: string) => {
     setTitle(val)

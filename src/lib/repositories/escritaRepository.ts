@@ -22,20 +22,50 @@ export const escritaRepository = {
   async saveNote(
     date: string,
     data: { title: string; body: string; tags: string[] },
-  ): Promise<EscritaNote> {
-    const existing = await this.getNoteByDate(date)
-    const now = new Date().toISOString()
-    const note: EscritaNote = {
-      id: existing ? existing.id : crypto.randomUUID(),
-      date,
-      title: data.title.trim(),
-      body: data.body,
-      tags: (data.tags || []).slice(0, 5),
-      created: existing ? existing.created : now,
-      updated: now,
-    }
-    await idb.put(idb.STORE_ESCRITA, note)
-    return note
+  ): Promise<EscritaNote | null> {
+    const trimmedTitle = data.title.trim()
+    const trimmedBody = data.body.trim()
+    const cleanTags = (data.tags || []).slice(0, 5)
+    const isEmpty = !trimmedTitle && !trimmedBody && cleanTags.length === 0
+
+    return idb.runTransaction<EscritaNote | null>(idb.STORE_ESCRITA, 'readwrite', (tx) => {
+      return new Promise<EscritaNote | null>((resolve, reject) => {
+        const store = tx.objectStore(idb.STORE_ESCRITA)
+        const index = store.index('date')
+        const getReq = index.get(date)
+
+        getReq.onerror = () => reject(getReq.error)
+        getReq.onsuccess = () => {
+          const existing = getReq.result as EscritaNote | undefined
+
+          if (isEmpty) {
+            if (existing) {
+              const delReq = store.delete(existing.id)
+              delReq.onerror = () => reject(delReq.error)
+              delReq.onsuccess = () => resolve(null)
+            } else {
+              resolve(null)
+            }
+            return
+          }
+
+          const now = new Date().toISOString()
+          const note: EscritaNote = {
+            id: existing ? existing.id : crypto.randomUUID(),
+            date,
+            title: trimmedTitle,
+            body: data.body,
+            tags: cleanTags,
+            created: existing ? existing.created : now,
+            updated: now,
+          }
+
+          const putReq = store.put(note)
+          putReq.onerror = () => reject(putReq.error)
+          putReq.onsuccess = () => resolve(note)
+        }
+      })
+    })
   },
 
   async deleteNote(id: string): Promise<void> {

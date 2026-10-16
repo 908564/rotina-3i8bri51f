@@ -54,8 +54,15 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
 export default function MaisPage() {
-  const { settings, setTheme, toggleModule, loadSamples, clearAllData, notifyDataChanged } =
-    useApp()
+  const {
+    settings,
+    setTheme,
+    toggleModule,
+    loadSamples,
+    clearAllData,
+    notifyDataChanged,
+    notifyExternalDataChanged,
+  } = useApp()
 
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
@@ -289,7 +296,7 @@ export default function MaisPage() {
       setImportConfirmOpen(false)
       setPendingImportPayload(null)
       setPendingValidation(null)
-      notifyDataChanged()
+      notifyExternalDataChanged()
       checkStorage()
 
       setTimeout(() => {

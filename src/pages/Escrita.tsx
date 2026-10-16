@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,6 +9,8 @@ import {
   PenLine,
   Check,
   Loader2,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { escritaRepository } from '@/lib/repositories/escritaRepository'
 import { EscritaNote } from '@/lib/types'
@@ -24,13 +26,21 @@ import {
   addDaysToDateKey,
   subDaysFromDateKey,
 } from '@/lib/dateUtils'
+import { useAutosave } from '@/hooks/useAutosave'
+import { toast } from '@/hooks/use-toast'
 
 function getTodayDateStr(): string {
   return getTodayDateKey()
 }
 
+interface NoteFormState {
+  title: string
+  body: string
+  tags: string[]
+}
+
 export default function EscritaPage() {
-  const { dataVersion, notifyDataChanged } = useApp()
+  const { externalDataVersion, notifyDataChanged } = useApp()
   const [currentDate, setCurrentDate] = useState<string>(getTodayDateStr())
   const [title, setTitle] = useState<string>('')
   const [body, setBody] = useState<string>('')
@@ -38,8 +48,6 @@ export default function EscritaPage() {
   const [newTagInput, setNewTagInput] = useState<string>('')
   const [showTagInput, setShowTagInput] = useState<boolean>(false)
 
-  // Status de salvamento: 'idle' | 'saving' | 'saved'
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [searchMode, setSearchMode] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [searchResults, setSearchResults] = useState<EscritaNote[]>([])
@@ -47,10 +55,76 @@ export default function EscritaPage() {
   const [allNotesDates, setAllNotesDates] = useState<Set<string>>(new Set())
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isInitialMount = useRef<boolean>(true)
+  const loadRequestIdRef = useRef<number>(0)
+  const currentDateRef = useRef<string>(currentDate)
+  currentDateRef.current = currentDate
 
-  // Carrega lista de datas que possuem anotações para exibir dots no calendário
+  // Refs para ler os valores correntes sem re-renders
+  const titleRef = useRef<string>(title)
+  const bodyRef = useRef<string>(body)
+  const tagsRef = useRef<string[]>(tags)
+  titleRef.current = title
+  bodyRef.current = body
+  tagsRef.current = tags
+
+  // Função para salvar a nota no repositório
+  const handleSaveNote = useCallback(
+    async (targetDate: string, val: NoteFormState) => {
+      const savedNote = await escritaRepository.saveNote(targetDate, {
+        title: val.title,
+        body: val.body,
+        tags: val.tags,
+      })
+
+      // Atualiza localmente o Set de datas do calendário e lista de recentes
+      const hasContent = val.body.trim().length > 0
+      setAllNotesDates((prev) => {
+        const next = new Set(prev)
+        if (hasContent) {
+          next.add(targetDate)
+        } else {
+          next.delete(targetDate)
+        }
+        return next
+      })
+
+      // Notifica outros módulos de que dados mudaram, sem disparar recarga nesta tela
+      notifyDataChanged()
+      return savedNote
+    },
+    [notifyDataChanged],
+  )
+
+  const autosaveValue = useMemo<NoteFormState>(() => ({ title, body, tags }), [title, body, tags])
+
+  const {
+    status: saveStatus,
+    flush,
+    isDirty,
+    retry: retrySave,
+    errorMessage,
+    scheduleSave,
+    cancel: cancelAutosave,
+  } = useAutosave<string, NoteFormState>({
+    key: currentDate,
+    value: autosaveValue,
+    delay: 400,
+    save: async (key, val) => {
+      await handleSaveNote(key, val)
+    },
+    onError: (err, count) => {
+      if (count >= 3) {
+        toast({
+          title: 'Erro ao salvar anotação',
+          description: 'Não foi possível gravar suas alterações após várias tentativas.',
+          variant: 'destructive',
+        })
+      }
+    },
+  })
+
+  // Carrega todas as datas com notas (somente ao montar ou após dados externos)
   const refreshAllNotesDates = useCallback(async () => {
     const list = await escritaRepository.getNotes()
     const datesSet = new Set(list.filter((n) => n.body.trim().length > 0).map((n) => n.date))
@@ -58,24 +132,59 @@ export default function EscritaPage() {
   }, [])
 
   // Carrega nota da data atual
-  const loadNoteForDate = useCallback(async (date: string) => {
-    const note = await escritaRepository.getNoteByDate(date)
-    if (note) {
-      setTitle(note.title || '')
-      setBody(note.body || '')
-      setTags(note.tags || [])
-    } else {
-      setTitle('')
-      setBody('')
-      setTags([])
+  const loadNoteForDate = useCallback(
+    async (date: string, force = false) => {
+      const reqId = ++loadRequestIdRef.current
+      const note = await escritaRepository.getNoteByDate(date)
+
+      // Se outra requisição mais nova foi disparada ou a data mudou, descarta resposta
+      if (reqId !== loadRequestIdRef.current) return
+      if (currentDateRef.current !== date && !force) return
+
+      // Fonte da verdade: se o usuário já digitou e está dirty, não sobrescrever
+      if (isDirty && !force) {
+        return
+      }
+
+      if (note) {
+        setTitle(note.title || '')
+        setBody(note.body || '')
+        setTags(note.tags || [])
+      } else {
+        setTitle('')
+        setBody('')
+        setTags([])
+      }
+    },
+    [isDirty],
+  )
+
+  // Recarga apenas na montagem inicial e quando currentDate mudar
+  const prevDateRef = useRef<string>(currentDate)
+  useEffect(() => {
+    if (prevDateRef.current !== currentDate) {
+      prevDateRef.current = currentDate
+      cancelAutosave()
+      loadNoteForDate(currentDate)
     }
-    setSaveStatus('idle')
+  }, [currentDate, cancelAutosave, loadNoteForDate])
+
+  // Carga inicial
+  useEffect(() => {
+    loadNoteForDate(currentDate, true)
+    refreshAllNotesDates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Atualiza com eventos externos (backup importado, limpar tudo, carregar exemplos)
   useEffect(() => {
-    loadNoteForDate(currentDate)
-    refreshAllNotesDates()
-  }, [currentDate, dataVersion, loadNoteForDate, refreshAllNotesDates])
+    if (externalDataVersion > 0) {
+      if (!isDirty) {
+        loadNoteForDate(currentDate, true)
+      }
+      refreshAllNotesDates()
+    }
+  }, [externalDataVersion, currentDate, isDirty, loadNoteForDate, refreshAllNotesDates])
 
   // Foco automático no corpo de texto se estiver no dia atual
   useEffect(() => {
@@ -89,52 +198,15 @@ export default function EscritaPage() {
     }
   }, [currentDate])
 
-  // Salvar no repositório com debounce de 600ms
-  const persistNote = useCallback(
-    async (noteTitle: string, noteBody: string, noteTags: string[]) => {
-      // Se não há conteúdo, não grava registro vazio
-      if (!noteTitle.trim() && !noteBody.trim() && noteTags.length === 0) {
-        setSaveStatus('idle')
-        return
-      }
-
-      setSaveStatus('saving')
-      try {
-        await escritaRepository.saveNote(currentDate, {
-          title: noteTitle,
-          body: noteBody,
-          tags: noteTags,
-        })
-        setSaveStatus('saved')
-        refreshAllNotesDates()
-        notifyDataChanged()
-        setTimeout(() => {
-          setSaveStatus((prev) => (prev === 'saved' ? 'idle' : prev))
-        }, 2000)
-      } catch {
-        // Preserva o texto na tela para o usuário não perder o que digitou
-        setSaveStatus('idle')
-      }
-    },
-    [currentDate, notifyDataChanged, refreshAllNotesDates],
-  )
-  // Dispara debounce sempre que título, corpo ou tags mudarem
-  const triggerAutoSave = (newT: string, newB: string, newTags: string[]) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    setSaveStatus('saving')
-    saveTimeoutRef.current = setTimeout(() => {
-      persistNote(newT, newB, newTags)
-    }, 600)
-  }
-
+  // Manipuladores de alteração
   const handleTitleChange = (val: string) => {
     setTitle(val)
-    triggerAutoSave(val, body, tags)
+    scheduleSave()
   }
 
   const handleBodyChange = (val: string) => {
     setBody(val)
-    triggerAutoSave(title, val, tags)
+    scheduleSave()
   }
 
   const handleAddTag = () => {
@@ -144,38 +216,62 @@ export default function EscritaPage() {
       setTags(nextTags)
       setNewTagInput('')
       setShowTagInput(false)
-      triggerAutoSave(title, body, nextTags)
+      scheduleSave()
     }
   }
 
   const handleRemoveTag = (tagToRemove: string) => {
     const nextTags = tags.filter((t) => t !== tagToRemove)
     setTags(nextTags)
-    triggerAutoSave(title, body, nextTags)
+    scheduleSave()
   }
 
-  // Salvar imediatamente ao fechar / trocar de aba (visibilitychange)
+  // Flush com listeners estáveis (visibilitychange, pagehide)
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-        persistNote(title, body, tags)
+        flush()
       }
     }
+    const handlePageHide = () => {
+      flush()
+    }
+
     document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('pagehide', handlePageHide)
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+      window.removeEventListener('pagehide', handlePageHide)
     }
-  }, [title, body, tags, persistNote])
+  }, [flush])
 
-  // Navegação de dias
-  const handlePrevDay = () => {
+  // Flush no desmonte do componente
+  useEffect(() => {
+    return () => {
+      flush()
+    }
+  }, [flush])
+
+  // Navegação de dias com flush imediato da data anterior
+  const handlePrevDay = async () => {
+    await flush()
     setCurrentDate(subDaysFromDateKey(currentDate, 1))
   }
 
-  const handleNextDay = () => {
+  const handleNextDay = async () => {
+    await flush()
     setCurrentDate(addDaysToDateKey(currentDate, 1))
+  }
+
+  const handleSelectDate = async (newD: string) => {
+    await flush()
+    setCurrentDate(newD)
+  }
+
+  const handleGoToToday = async () => {
+    await flush()
+    setCurrentDate(getTodayDateStr())
   }
 
   // Busca instantânea
@@ -217,13 +313,36 @@ export default function EscritaPage() {
                   <Check className="w-3.5 h-3.5" /> Salvo ✓
                 </span>
               )}
+              {saveStatus === 'error' && (
+                <div className="flex items-center gap-1">
+                  <span
+                    className="text-destructive flex items-center gap-1 text-[11px] font-medium"
+                    title={errorMessage}
+                  >
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{errorMessage || 'Erro ao salvar'}</span>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={retrySave}
+                    className="h-6 px-1.5 text-[11px] text-destructive hover:bg-destructive/10"
+                    title="Tentar salvar agora"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" /> Tentar agora
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Botão de Busca */}
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => {
+              onClick={async () => {
+                if (!searchMode) {
+                  await flush()
+                }
                 setSearchMode(!searchMode)
                 if (searchMode) setSearchQuery('')
               }}
@@ -266,7 +385,8 @@ export default function EscritaPage() {
                     {searchResults.map((note) => (
                       <div
                         key={note.id}
-                        onClick={() => {
+                        onClick={async () => {
+                          await flush()
                           setCurrentDate(note.date)
                           setSearchMode(false)
                         }}
@@ -319,7 +439,10 @@ export default function EscritaPage() {
 
               <button
                 type="button"
-                onClick={() => setCalendarOpen(true)}
+                onClick={async () => {
+                  await flush()
+                  setCalendarOpen(true)
+                }}
                 className="flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-muted/70 transition-colors"
                 aria-label="Abrir calendário"
               >
@@ -351,6 +474,7 @@ export default function EscritaPage() {
               placeholder="Título (opcional)"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
+              onBlur={() => flush()}
               className="text-lg font-bold border-0 border-b border-transparent focus:border-border rounded-none px-1 h-10 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/50 transition-colors"
             />
 
@@ -360,6 +484,7 @@ export default function EscritaPage() {
                 ref={textareaRef}
                 value={body}
                 onChange={(e) => handleBodyChange(e.target.value)}
+                onBlur={() => flush()}
                 placeholder="Como foi seu dia? Escreva livremente seus pensamentos..."
                 className="w-full min-h-[260px] sm:min-h-[320px] p-4 text-base sm:text-lg leading-relaxed bg-card rounded-2xl border-border resize-none focus-visible:ring-1 focus-visible:ring-[#7C8CFF] shadow-subtle placeholder:text-muted-foreground/60 transition-all font-sans"
               />
@@ -446,7 +571,7 @@ export default function EscritaPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setCurrentDate(getTodayDateStr())}
+              onClick={handleGoToToday}
               className="text-[11px] h-7 px-2 text-[#7C8CFF] font-semibold"
             >
               Hoje
@@ -459,7 +584,10 @@ export default function EscritaPage() {
           </p>
 
           <Button
-            onClick={() => setCalendarOpen(true)}
+            onClick={async () => {
+              await flush()
+              setCalendarOpen(true)
+            }}
             variant="outline"
             className="w-full h-10 rounded-xl text-xs font-semibold border-border hover:bg-muted flex items-center justify-center gap-2"
           >
@@ -467,7 +595,7 @@ export default function EscritaPage() {
             Abrir calendário completo
           </Button>
 
-          {/* Atalho com últimas 3 anotações */}
+          {/* Atalho com últimas 4 anotações */}
           <div className="pt-2 border-t border-border/60 space-y-2">
             <span className="text-[11px] font-semibold text-muted-foreground">Recentes:</span>
             {Array.from(allNotesDates)
@@ -477,7 +605,7 @@ export default function EscritaPage() {
                 <button
                   key={dStr}
                   type="button"
-                  onClick={() => setCurrentDate(dStr)}
+                  onClick={() => handleSelectDate(dStr)}
                   className={cn(
                     'w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors',
                     dStr === currentDate
@@ -499,7 +627,7 @@ export default function EscritaPage() {
         onClose={() => setCalendarOpen(false)}
         selectedDate={currentDate}
         datesWithNotes={allNotesDates}
-        onSelectDate={(newD) => setCurrentDate(newD)}
+        onSelectDate={handleSelectDate}
       />
     </div>
   )

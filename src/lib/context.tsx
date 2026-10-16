@@ -14,7 +14,9 @@ interface AppContextValue {
   loadSamples: () => Promise<void>
   clearAllData: () => Promise<void>
   dataVersion: number
+  externalDataVersion: number
   notifyDataChanged: () => void
+  notifyExternalDataChanged: () => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -22,8 +24,14 @@ const AppContext = createContext<AppContextValue | null>(null)
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<AppSettings>(() => settingsRepository.getSettings())
   const [dataVersion, setDataVersion] = useState(0)
+  const [externalDataVersion, setExternalDataVersion] = useState(0)
 
   const notifyDataChanged = useCallback(() => {
+    setDataVersion((v) => v + 1)
+  }, [])
+
+  const notifyExternalDataChanged = useCallback(() => {
+    setExternalDataVersion((v) => v + 1)
     setDataVersion((v) => v + 1)
   }, [])
 
@@ -104,15 +112,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await loadSampleData()
     const updated = settingsRepository.getSettings()
     setSettings(updated)
-    notifyDataChanged()
-  }, [notifyDataChanged])
+    notifyExternalDataChanged()
+  }, [notifyExternalDataChanged])
 
   const clearAllData = useCallback(async () => {
     await backupRepository.clearAll()
     const updated = settingsRepository.getSettings()
     setSettings(updated)
-    notifyDataChanged()
-  }, [notifyDataChanged])
+    notifyExternalDataChanged()
+  }, [notifyExternalDataChanged])
 
   return (
     <AppContext.Provider
@@ -124,7 +132,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadSamples,
         clearAllData,
         dataVersion,
+        externalDataVersion,
         notifyDataChanged,
+        notifyExternalDataChanged,
       }}
     >
       {children}
