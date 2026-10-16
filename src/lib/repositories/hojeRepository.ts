@@ -1,0 +1,110 @@
+import { escritaRepository } from './escritaRepository'
+import { leituraRepository } from './leituraRepository'
+import { treinoRepository } from './treinoRepository'
+import { settingsRepository } from './settingsRepository'
+import { EscritaNote, TreinoPlanoSemanal, TreinoLog, ReadingGoalsProgress, Livro } from '../types'
+
+export interface TodayOverview {
+  dateStr: string // YYYY-MM-DD
+  dayOfWeek: number // 0-6
+  overallProgressPercent: number
+  workout: {
+    plan?: TreinoPlanoSemanal
+    log?: TreinoLog
+    isRestDay: boolean
+    isCompleted: boolean
+    completedSetsCount: number
+    totalSetsCount: number
+  }
+  reading: {
+    goals: ReadingGoalsProgress
+    activeBook?: Livro
+    allBooksCount: number
+  }
+  writing: {
+    todayNote?: EscritaNote
+  }
+}
+
+export const hojeRepository = {
+  async getTodayOverview(): Promise<TodayOverview> {
+    const today = new Date()
+    const dateStr = today.toISOString().split('T')[0]
+    const dayOfWeek = today.getDay()
+
+    // 1) Treino de hoje
+    const plan = await treinoRepository.getPlanByDayOfWeek(dayOfWeek)
+    const log = await treinoRepository.getLogByDate(dateStr)
+
+    let totalPlannedSets = 0
+    if (plan && plan.exercises) {
+      totalPlannedSets = plan.exercises.reduce((sum, e) => sum + (e.series || 0), 0)
+    }
+
+    let completedSetsCount = 0
+    if (log && log.completedSets) {
+      completedSetsCount = log.completedSets.filter((s) => s.concluido).length
+    }
+
+    const isRestDay = !plan || plan.exercises.length === 0
+    const isCompleted = !isRestDay && totalPlannedSets > 0 && completedSetsCount >= totalPlannedSets
+
+    // 2) Leitura
+    const goals = await leituraRepository.getGoalsProgress()
+    const livros = await leituraRepository.getLivros()
+    const activeBook = livros.find((l) => l.status === 'lendo') || livros[0]
+
+    // 3) Escrita
+    const todayNote = await escritaRepository.getNoteByDate(dateStr)
+
+    // 4) Progresso geral do dia
+    // Combina leitura diária (hoje / 20) e treino de hoje (completas / planejadas)
+    let componentsCount = 0
+    let totalScore = 0
+
+    const settings = settingsRepository.getSettings()
+
+    if (settings.activeModules.treino && !isRestDay && totalPlannedSets > 0) {
+      componentsCount++
+      const workoutRatio = Math.min(1, completedSetsCount / totalPlannedSets)
+      totalScore += workoutRatio
+    }
+
+    if (settings.activeModules.leitura) {
+      componentsCount++
+      const readingRatio = Math.min(1, goals.todayPages / (goals.dailyTarget || 20))
+      totalScore += readingRatio
+    }
+
+    if (settings.activeModules.escrita) {
+      componentsCount++
+      const writingRatio = todayNote && todayNote.body.trim().length > 0 ? 1 : 0
+      totalScore += writingRatio
+    }
+
+    const overallProgressPercent =
+      componentsCount > 0 ? Math.round((totalScore / componentsCount) * 100) : 0
+
+    return {
+      dateStr,
+      dayOfWeek,
+      overallProgressPercent,
+      workout: {
+        plan,
+        log,
+        isRestDay,
+        isCompleted,
+        completedSetsCount,
+        totalSetsCount: totalPlannedSets,
+      },
+      reading: {
+        goals,
+        activeBook,
+        allBooksCount: livros.length,
+      },
+      writing: {
+        todayNote,
+      },
+    }
+  },
+}
