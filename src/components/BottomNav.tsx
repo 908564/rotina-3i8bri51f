@@ -45,120 +45,76 @@ export const BottomNav: React.FC = () => {
     <>
       <nav
         aria-label="Navegação Principal"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border/80 h-[84px] pb-[env(safe-area-inset-bottom,0px)] shadow-lg"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#F6F3EE]/95 dark:bg-[#1C1814]/95 backdrop-blur-md border-t border-[#EAE4DB]/80 dark:border-[#38332B] h-[72px] pb-[env(safe-area-inset-bottom,0px)]"
       >
-        <div className="max-w-[440px] md:max-w-xl mx-auto flex items-center justify-between h-full px-4">
+        <div className="max-w-[440px] md:max-w-xl mx-auto flex items-center justify-between h-full px-6">
           {/* 1. HOJE */}
           <NavLink
             to="/"
             end
-            className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] min-w-[48px] select-none focus:outline-none transition-transform active:scale-95"
+            className="flex items-center justify-center flex-1 h-full select-none focus:outline-none transition-transform active:scale-95"
           >
-            <div
-              className={`flex items-center justify-center w-10 h-7 rounded-full transition-all ${
+            <Home
+              className={`w-[22px] h-[22px] stroke-[1.8] ${
                 isTodayActive
-                  ? 'bg-[#E8883A]/15 text-[#B4540F] dark:text-[#E8883A]'
-                  : 'text-muted-foreground'
+                  ? 'text-[#E8883A]'
+                  : 'text-[#6B645C] hover:text-[#1F1B16] dark:text-[#A8A199]'
               }`}
-            >
-              <Home className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span
-              className={`text-[11px] tracking-tight mt-1 leading-none ${
-                isTodayActive
-                  ? 'text-[#B4540F] dark:text-[#E8883A] font-bold'
-                  : 'text-muted-foreground font-normal'
-              }`}
-            >
-              Hoje
-            </span>
+            />
           </NavLink>
 
           {/* 2. MÓDULOS */}
           <NavLink
             to="/modulos"
-            className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] min-w-[48px] select-none focus:outline-none transition-transform active:scale-95"
+            className="flex items-center justify-center flex-1 h-full select-none focus:outline-none transition-transform active:scale-95"
           >
-            <div
-              className={`flex items-center justify-center w-10 h-7 rounded-full transition-all ${
+            <LayoutGrid
+              className={`w-[22px] h-[22px] stroke-[1.8] ${
                 isInsideModule
-                  ? 'bg-[#E8883A]/15 text-[#B4540F] dark:text-[#E8883A]'
-                  : 'text-muted-foreground'
+                  ? 'text-[#E8883A]'
+                  : 'text-[#6B645C] hover:text-[#1F1B16] dark:text-[#A8A199]'
               }`}
-            >
-              <LayoutGrid className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span
-              className={`text-[11px] tracking-tight mt-1 leading-none ${
-                isInsideModule
-                  ? 'text-[#B4540F] dark:text-[#E8883A] font-bold'
-                  : 'text-muted-foreground font-normal'
-              }`}
-            >
-              Módulos
-            </span>
+            />
           </NavLink>
 
-          {/* 3. [+] CENTRAL (Botão circular escuro de 52px, elevado) */}
-          <div className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] min-w-[48px]">
+          {/* 3. [+] CENTRAL (Botão circular escuro de 52px) */}
+          <div className="flex items-center justify-center flex-1 h-full">
             <button
               type="button"
               onClick={() => setNewEntryModalOpen(true)}
               aria-label="Novo registro"
-              className="w-[52px] h-[52px] rounded-full bg-[#1F1B16] dark:bg-[#E8883A] text-white dark:text-[#1F1B16] flex items-center justify-center shadow-lg -translate-y-2 hover:scale-105 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E8883A]"
+              className="w-[48px] h-[48px] rounded-full bg-[#1F1B16] dark:bg-[#F6F3EE] text-white dark:text-[#1F1B16] flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E8883A]"
             >
-              <Plus className="w-6 h-6 stroke-[2.5]" />
+              <Plus className="w-5 h-5 stroke-[2.2]" />
             </button>
           </div>
 
           {/* 4. RESUMO */}
           <NavLink
             to="/resumo"
-            className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] min-w-[48px] select-none focus:outline-none transition-transform active:scale-95"
+            className="flex items-center justify-center flex-1 h-full select-none focus:outline-none transition-transform active:scale-95"
           >
-            <div
-              className={`flex items-center justify-center w-10 h-7 rounded-full transition-all ${
+            <BarChart2
+              className={`w-[22px] h-[22px] stroke-[1.8] ${
                 isResumoActive
-                  ? 'bg-[#E8883A]/15 text-[#B4540F] dark:text-[#E8883A]'
-                  : 'text-muted-foreground'
+                  ? 'text-[#E8883A]'
+                  : 'text-[#6B645C] hover:text-[#1F1B16] dark:text-[#A8A199]'
               }`}
-            >
-              <BarChart2 className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span
-              className={`text-[11px] tracking-tight mt-1 leading-none ${
-                isResumoActive
-                  ? 'text-[#B4540F] dark:text-[#E8883A] font-bold'
-                  : 'text-muted-foreground font-normal'
-              }`}
-            >
-              Resumo
-            </span>
+            />
           </NavLink>
 
           {/* 5. MAIS */}
           <NavLink
             to="/mais"
-            className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] min-w-[48px] select-none focus:outline-none transition-transform active:scale-95"
+            className="flex items-center justify-center flex-1 h-full select-none focus:outline-none transition-transform active:scale-95"
           >
-            <div
-              className={`flex items-center justify-center w-10 h-7 rounded-full transition-all ${
+            <MoreHorizontal
+              className={`w-[22px] h-[22px] stroke-[1.8] ${
                 isMaisActive
-                  ? 'bg-[#E8883A]/15 text-[#B4540F] dark:text-[#E8883A]'
-                  : 'text-muted-foreground'
+                  ? 'text-[#E8883A]'
+                  : 'text-[#6B645C] hover:text-[#1F1B16] dark:text-[#A8A199]'
               }`}
-            >
-              <MoreHorizontal className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span
-              className={`text-[11px] tracking-tight mt-1 leading-none ${
-                isMaisActive
-                  ? 'text-[#B4540F] dark:text-[#E8883A] font-bold'
-                  : 'text-muted-foreground font-normal'
-              }`}
-            >
-              Mais
-            </span>
+            />
           </NavLink>
         </div>
       </nav>
