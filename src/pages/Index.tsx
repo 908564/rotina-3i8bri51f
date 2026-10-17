@@ -17,6 +17,9 @@ import {
 import { useApp } from '@/lib/context'
 import { hojeRepository, FastTodayData } from '@/lib/repositories/hojeRepository'
 import { ProgressRing } from '@/components/ProgressRing'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { AuthModal } from '@/components/auth/AuthModal'
+import { LocalDataMigrationModal } from '@/components/auth/LocalDataMigrationModal'
 import { QuickPagesSheet } from '@/components/quick/QuickPagesSheet'
 import { QuickStudySheet } from '@/components/quick/QuickStudySheet'
 import { QuickWorkoutSheet } from '@/components/quick/QuickWorkoutSheet'
@@ -29,6 +32,18 @@ export default function Index() {
   const { settings, updateSettings, loadSamples, dataVersion, notifyDataChanged } = useApp()
   const [data, setData] = useState<FastTodayData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Auth & Sincronização na nuvem
+  const { user } = useAuth()
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [migrationModalOpen, setMigrationModalOpen] = useState(false)
+
+  useEffect(() => {
+    // Se o usuário acabou de logar e ainda não dispensou a migração
+    if (user && !localStorage.getItem(`rotina_migration_prompted_${user.id}`)) {
+      setMigrationModalOpen(true)
+    }
+  }, [user])
 
   // Sheets
   const [quickPagesOpen, setQuickPagesOpen] = useState(false)
@@ -478,6 +493,31 @@ export default function Index() {
         onSuccess={handleQuickSuccess}
       />
       <SearchNotesModal open={searchOpen} onOpenChange={setSearchOpen} />
+
+      {/* MODAL DE AUTENTICAÇÃO */}
+      {authModalOpen && (
+        <AuthModal
+          initialMode="welcome"
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
+
+      {/* MODAL DE MIGRAÇÃO DE DADOS LOCAIS */}
+      {migrationModalOpen && user && (
+        <LocalDataMigrationModal
+          userId={user.id}
+          onDone={() => {
+            localStorage.setItem(`rotina_migration_prompted_${user.id}`, 'true')
+            setMigrationModalOpen(false)
+            refreshData()
+          }}
+          onDismiss={() => {
+            localStorage.setItem(`rotina_migration_prompted_${user.id}`, 'true')
+            setMigrationModalOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

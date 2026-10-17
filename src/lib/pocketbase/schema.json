@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-17T00:47:46.478Z",
+  "generatedAt": "2026-10-17T03:06:21.625Z",
   "collections": [
     {
       "name": "users",
@@ -7,7 +7,7 @@
       "apiRules": {
         "list": "id = @request.auth.id",
         "view": "id = @request.auth.id",
-        "create": "",
+        "create": "@collection.invites.email ?= @request.body.email",
         "update": "id = @request.auth.id",
         "delete": "id = @request.auth.id"
       },
@@ -43,6 +43,185 @@
         "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
         "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
       ]
+    },
+    {
+      "name": "invites",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "email",
+          "type": "email",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_invites_email ON invites (email)"]
+    },
+    {
+      "name": "sync_records",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id",
+        "view": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.auth.verified = true && @request.body.user = @request.auth.id",
+        "update": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id && @request.body.user = @request.auth.id",
+        "delete": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "entity",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "note",
+            "book",
+            "bookNote",
+            "readingLog",
+            "readingGoal",
+            "exercise",
+            "workoutPlanDay",
+            "workoutLog",
+            "course",
+            "studyPage",
+            "certificate",
+            "studySession",
+            "studyGoal",
+            "project",
+            "projectNote",
+            "projectTask",
+            "achievement",
+            "experience",
+            "workNote",
+            "daySummary",
+            "settings"
+          ]
+        },
+        {
+          "name": "clientId",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "clientUpdatedAt",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deletedAt",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_sync_records_user_clientId ON sync_records (user, clientId)",
+        "CREATE INDEX idx_sync_records_user_entity ON sync_records (user, entity)",
+        "CREATE INDEX idx_sync_records_updated ON sync_records (updated)"
+      ]
+    },
+    {
+      "name": "sync_files",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id",
+        "view": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.auth.verified = true && @request.body.user = @request.auth.id",
+        "update": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id && @request.body.user = @request.auth.id",
+        "delete": "@request.auth.id != '' && @request.auth.verified = true && user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "clientId",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "fileType",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_sync_files_user_clientId ON sync_files (user, clientId)"]
     }
   ]
 }

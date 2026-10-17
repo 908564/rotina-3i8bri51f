@@ -1,4 +1,5 @@
 import { idb } from '../indexedDb'
+import { recordOutboxInTx } from '../sync/outboxHelper'
 import {
   Project,
   Achievement,
@@ -57,7 +58,10 @@ export const trabalhoRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_PROJECTS, project)
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_PROJECTS).put(project)
+      recordOutboxInTx(tx, 'project', project.id, 'upsert', project)
+    })
     return project
   },
 
@@ -66,21 +70,27 @@ export const trabalhoRepository = {
     const achievements = await this.getAchievements()
     const linkedAchievements = achievements.filter((a) => a.projectId === id)
 
-    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_ACHIEVEMENTS], 'readwrite', (tx) => {
-      // Deleta o projeto
-      tx.objectStore(idb.STORE_PROJECTS).delete(id)
+    await idb.runTransaction(
+      [idb.STORE_PROJECTS, idb.STORE_ACHIEVEMENTS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        // Deleta o projeto
+        tx.objectStore(idb.STORE_PROJECTS).delete(id)
+        recordOutboxInTx(tx, 'project', id, 'delete')
 
-      // Limpa o vínculo projectId das conquistas associadas para não deixar referência inválida
-      const achStore = tx.objectStore(idb.STORE_ACHIEVEMENTS)
-      for (const ach of linkedAchievements) {
-        const updatedAch: Achievement = {
-          ...ach,
-          projectId: undefined,
-          updated: new Date().toISOString(),
+        // Limpa o vínculo projectId das conquistas associadas para não deixar referência inválida
+        const achStore = tx.objectStore(idb.STORE_ACHIEVEMENTS)
+        for (const ach of linkedAchievements) {
+          const updatedAch: Achievement = {
+            ...ach,
+            projectId: undefined,
+            updated: new Date().toISOString(),
+          }
+          achStore.put(updatedAch)
+          recordOutboxInTx(tx, 'achievement', updatedAch.id, 'upsert', updatedAch)
         }
-        achStore.put(updatedAch)
-      }
-    })
+      },
+    )
   },
 
   async toggleTask(projectId: string, taskId: string): Promise<Project | undefined> {
@@ -103,7 +113,10 @@ export const trabalhoRepository = {
       tasks: updatedTasks,
       updated: nowIso,
     }
-    await idb.put(idb.STORE_PROJECTS, updatedProject)
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_PROJECTS).put(updatedProject)
+      recordOutboxInTx(tx, 'project', updatedProject.id, 'upsert', updatedProject)
+    })
     return updatedProject
   },
 
@@ -122,7 +135,10 @@ export const trabalhoRepository = {
       tasks: [...project.tasks, newTask],
       updated: new Date().toISOString(),
     }
-    await idb.put(idb.STORE_PROJECTS, updatedProject)
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_PROJECTS).put(updatedProject)
+      recordOutboxInTx(tx, 'project', updatedProject.id, 'upsert', updatedProject)
+    })
     return updatedProject
   },
 
@@ -135,7 +151,10 @@ export const trabalhoRepository = {
       tasks: project.tasks.filter((t) => t.id !== taskId),
       updated: new Date().toISOString(),
     }
-    await idb.put(idb.STORE_PROJECTS, updatedProject)
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_PROJECTS).put(updatedProject)
+      recordOutboxInTx(tx, 'project', updatedProject.id, 'upsert', updatedProject)
+    })
     return updatedProject
   },
 
@@ -168,7 +187,10 @@ export const trabalhoRepository = {
       notes: updatedNotes,
       updated: now,
     }
-    await idb.put(idb.STORE_PROJECTS, updatedProject)
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_PROJECTS).put(updatedProject)
+      recordOutboxInTx(tx, 'project', updatedProject.id, 'upsert', updatedProject)
+    })
     return updatedProject
   },
 
@@ -181,7 +203,10 @@ export const trabalhoRepository = {
       notes: project.notes.filter((n) => n.id !== noteId),
       updated: new Date().toISOString(),
     }
-    await idb.put(idb.STORE_PROJECTS, updatedProject)
+    await idb.runTransaction([idb.STORE_PROJECTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_PROJECTS).put(updatedProject)
+      recordOutboxInTx(tx, 'project', updatedProject.id, 'upsert', updatedProject)
+    })
     return updatedProject
   },
 
@@ -224,12 +249,18 @@ export const trabalhoRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_ACHIEVEMENTS, achievement)
+    await idb.runTransaction([idb.STORE_ACHIEVEMENTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_ACHIEVEMENTS).put(achievement)
+      recordOutboxInTx(tx, 'achievement', achievement.id, 'upsert', achievement)
+    })
     return achievement
   },
 
   async deleteAchievement(id: string): Promise<void> {
-    await idb.delete(idb.STORE_ACHIEVEMENTS, id)
+    await idb.runTransaction([idb.STORE_ACHIEVEMENTS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_ACHIEVEMENTS).delete(id)
+      recordOutboxInTx(tx, 'achievement', id, 'delete')
+    })
   },
 
   // ========================
@@ -275,12 +306,18 @@ export const trabalhoRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_EXPERIENCES, exp)
+    await idb.runTransaction([idb.STORE_EXPERIENCES, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_EXPERIENCES).put(exp)
+      recordOutboxInTx(tx, 'experience', exp.id, 'upsert', exp)
+    })
     return exp
   },
 
   async deleteExperience(id: string): Promise<void> {
-    await idb.delete(idb.STORE_EXPERIENCES, id)
+    await idb.runTransaction([idb.STORE_EXPERIENCES, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_EXPERIENCES).delete(id)
+      recordOutboxInTx(tx, 'experience', id, 'delete')
+    })
   },
 
   // ========================
@@ -319,12 +356,18 @@ export const trabalhoRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_WORK_NOTES, note)
+    await idb.runTransaction([idb.STORE_WORK_NOTES, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_WORK_NOTES).put(note)
+      recordOutboxInTx(tx, 'workNote', note.id, 'upsert', note)
+    })
     return note
   },
 
   async deleteWorkNote(id: string): Promise<void> {
-    await idb.delete(idb.STORE_WORK_NOTES, id)
+    await idb.runTransaction([idb.STORE_WORK_NOTES, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_WORK_NOTES).delete(id)
+      recordOutboxInTx(tx, 'workNote', id, 'delete')
+    })
   },
 
   async searchWorkNotes(query: string): Promise<WorkNote[]> {

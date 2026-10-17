@@ -1,4 +1,5 @@
 import { idb } from '../indexedDb'
+import { recordOutboxInTx } from '../sync/outboxHelper'
 import { TreinoPlanoSemanal, TreinoLog, ExerciseHistoryPoint } from '../types'
 
 export const treinoRepository = {
@@ -69,12 +70,18 @@ export const treinoRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_TREINO_PLANO, saved)
+    await idb.runTransaction([idb.STORE_TREINO_PLANO, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_TREINO_PLANO).put(saved)
+      recordOutboxInTx(tx, 'workoutPlanDay', saved.id, 'upsert', saved)
+    })
     return saved
   },
 
   async deletePlan(id: string): Promise<void> {
-    await idb.delete(idb.STORE_TREINO_PLANO, id)
+    await idb.runTransaction([idb.STORE_TREINO_PLANO, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_TREINO_PLANO).delete(id)
+      recordOutboxInTx(tx, 'workoutPlanDay', id, 'delete')
+    })
   },
 
   // Logs de treino
@@ -101,7 +108,10 @@ export const treinoRepository = {
       created: existing ? existing.created : now,
       updated: now,
     }
-    await idb.put(idb.STORE_TREINO_LOG, saved)
+    await idb.runTransaction([idb.STORE_TREINO_LOG, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_TREINO_LOG).put(saved)
+      recordOutboxInTx(tx, 'workoutLog', saved.id, 'upsert', saved)
+    })
     return saved
   },
 

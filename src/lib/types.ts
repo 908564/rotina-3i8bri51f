@@ -377,6 +377,54 @@ export interface WorkNote {
 // ========================
 // BACKUP / EXPORT / IMPORT
 // ========================
+// ========================
+// SYNC TYPES (ETAPA 1)
+// ========================
+export type SyncEntity =
+  | 'note'
+  | 'book'
+  | 'bookNote'
+  | 'readingLog'
+  | 'readingGoal'
+  | 'exercise'
+  | 'workoutPlanDay'
+  | 'workoutLog'
+  | 'course'
+  | 'studyPage'
+  | 'certificate'
+  | 'studySession'
+  | 'studyGoal'
+  | 'project'
+  | 'projectNote'
+  | 'projectTask'
+  | 'achievement'
+  | 'experience'
+  | 'workNote'
+  | 'daySummary'
+  | 'settings'
+
+export type SyncOperation = 'upsert' | 'delete'
+
+export interface SyncOutboxItem {
+  id: string // UUID do item no outbox
+  entity: SyncEntity
+  clientId: string // id do objeto de domínio
+  operation: SyncOperation
+  data?: any // payload para upsert
+  attempts: number
+  timestamp: string // ISO timestamp da alteração
+  lastError?: string
+}
+
+export interface SyncMetaState {
+  key: string // normalmente 'default'
+  lastPulledAt: string | null
+  userId: string | null
+  status: 'idle' | 'syncing' | 'offline' | 'error'
+  lastError?: string
+  lastSyncedAt?: string | null
+}
+
 export interface ExportDataPayload {
   schemaVersion: number
   exportedAt: string

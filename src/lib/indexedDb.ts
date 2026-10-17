@@ -28,6 +28,8 @@ const STORE_ACHIEVEMENTS = 'achievements'
 const STORE_EXPERIENCES = 'experiences'
 const STORE_WORK_NOTES = 'work_notes'
 const STORE_DAY_SUMMARIES = 'day_summaries'
+const STORE_SYNC_OUTBOX = 'sync_outbox'
+const STORE_SYNC_META = 'sync_meta'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -121,6 +123,17 @@ function getDB(): Promise<IDBDatabase> {
       // v4: DAY SUMMARIES
       if (!db.objectStoreNames.contains(STORE_DAY_SUMMARIES)) {
         db.createObjectStore(STORE_DAY_SUMMARIES, { keyPath: 'date' })
+      }
+
+      // v5: SYNC OUTBOX e SYNC META
+      if (!db.objectStoreNames.contains(STORE_SYNC_OUTBOX)) {
+        const outboxStore = db.createObjectStore(STORE_SYNC_OUTBOX, { keyPath: 'id' })
+        outboxStore.createIndex('clientId', 'clientId', { unique: false })
+        outboxStore.createIndex('timestamp', 'timestamp', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_SYNC_META)) {
+        db.createObjectStore(STORE_SYNC_META, { keyPath: 'key' })
       }
     }
 
@@ -407,6 +420,8 @@ export const idb = {
   STORE_EXPERIENCES,
   STORE_WORK_NOTES,
   STORE_DAY_SUMMARIES,
+  STORE_SYNC_OUTBOX,
+  STORE_SYNC_META,
   getAll: getAllFromStore,
   get: getFromStore,
   put: putInStore,

@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { DaySummary } from '../types'
+import { recordOutboxInTx } from '../sync/outboxHelper'
 import { subDaysFromDateKey, getTodayDateKey } from '../dateUtils'
 
 export const daySummaryRepository = {
@@ -17,7 +18,14 @@ export const daySummaryRepository = {
    * mas para o dia atual ou na inicialização grava com updatedAt.
    */
   async save(summary: DaySummary): Promise<void> {
-    await idb.put(idb.STORE_DAY_SUMMARIES, summary)
+    await idb.runTransaction(
+      [idb.STORE_DAY_SUMMARIES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_DAY_SUMMARIES).put(summary)
+        recordOutboxInTx(tx, 'daySummary', summary.date, 'upsert', summary)
+      },
+    )
   },
 
   /**
@@ -42,7 +50,14 @@ export const daySummaryRepository = {
       updatedAt: nowIso,
     }
 
-    await idb.put(idb.STORE_DAY_SUMMARIES, item)
+    await idb.runTransaction(
+      [idb.STORE_DAY_SUMMARIES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_DAY_SUMMARIES).put(item)
+        recordOutboxInTx(tx, 'daySummary', item.date, 'upsert', item)
+      },
+    )
     return item
   },
 

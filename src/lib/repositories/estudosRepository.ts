@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { getTodayDateKey, getDaysAgoKey } from '../dateUtils'
+import { recordOutboxInTx } from '../sync/outboxHelper'
 import {
   Course,
   StudyPage,
@@ -44,7 +45,10 @@ export const estudosRepository = {
       updated: nowIso,
     }
 
-    await idb.put(idb.STORE_COURSES, fullCourse)
+    await idb.runTransaction([idb.STORE_COURSES, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_COURSES).put(fullCourse)
+      recordOutboxInTx(tx, 'course', fullCourse.id, 'upsert', fullCourse)
+    })
     return fullCourse
   },
 
@@ -64,33 +68,39 @@ export const estudosRepository = {
         idb.STORE_STUDY_CERTIFICATES,
         idb.STORE_STUDY_SESSIONS,
         idb.STORE_STUDY_GOALS,
+        idb.STORE_SYNC_OUTBOX,
       ],
       'readwrite',
       (tx) => {
         // Deleta o curso
         tx.objectStore(idb.STORE_COURSES).delete(id)
+        recordOutboxInTx(tx, 'course', id, 'delete')
 
         // Deleta páginas associadas
         const pagesStore = tx.objectStore(idb.STORE_STUDY_PAGES)
         for (const p of pages) {
           pagesStore.delete(p.id)
+          recordOutboxInTx(tx, 'studyPage', p.id, 'delete')
         }
 
         // Deleta certificados associados
         const certsStore = tx.objectStore(idb.STORE_STUDY_CERTIFICATES)
         for (const c of certs) {
           certsStore.delete(c.id)
+          recordOutboxInTx(tx, 'certificate', c.id, 'delete')
         }
 
         // Deleta sessões associadas
         const sessionsStore = tx.objectStore(idb.STORE_STUDY_SESSIONS)
         for (const s of sessions) {
           sessionsStore.delete(s.id)
+          recordOutboxInTx(tx, 'studySession', s.id, 'delete')
         }
 
         // Deleta meta associada
         if (goal) {
           tx.objectStore(idb.STORE_STUDY_GOALS).delete(goal.id)
+          recordOutboxInTx(tx, 'studyGoal', goal.id, 'delete')
         }
       },
     )
@@ -134,13 +144,21 @@ export const estudosRepository = {
       updated: nowIso,
     }
 
-    await idb.put(idb.STORE_STUDY_PAGES, fullPage)
-
-    // Atualiza timestamp do curso
     const course = await this.getCourseById(page.courseId)
-    if (course) {
-      await idb.put(idb.STORE_COURSES, { ...course, updated: nowIso })
-    }
+    const updatedCourse = course ? { ...course, updated: nowIso } : null
+
+    await idb.runTransaction(
+      [idb.STORE_STUDY_PAGES, idb.STORE_COURSES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_PAGES).put(fullPage)
+        recordOutboxInTx(tx, 'studyPage', fullPage.id, 'upsert', fullPage)
+        if (updatedCourse) {
+          tx.objectStore(idb.STORE_COURSES).put(updatedCourse)
+          recordOutboxInTx(tx, 'course', updatedCourse.id, 'upsert', updatedCourse)
+        }
+      },
+    )
 
     // Marca como última aberta
     this.setLastOpenedPage({
@@ -154,18 +172,25 @@ export const estudosRepository = {
 
   async deletePage(id: string): Promise<void> {
     const page = await this.getPageById(id)
-    await idb.delete(idb.STORE_STUDY_PAGES, id)
+    const course = page ? await this.getCourseById(page.courseId) : null
+    const updatedCourse = course ? { ...course, updated: new Date().toISOString() } : null
+
+    await idb.runTransaction(
+      [idb.STORE_STUDY_PAGES, idb.STORE_COURSES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_PAGES).delete(id)
+        recordOutboxInTx(tx, 'studyPage', id, 'delete')
+        if (updatedCourse) {
+          tx.objectStore(idb.STORE_COURSES).put(updatedCourse)
+          recordOutboxInTx(tx, 'course', updatedCourse.id, 'upsert', updatedCourse)
+        }
+      },
+    )
 
     const lastPage = this.getLastOpenedPage()
     if (lastPage && lastPage.pageId === id) {
       localStorage.removeItem(LAST_OPENED_PAGE_KEY)
-    }
-
-    if (page) {
-      const course = await this.getCourseById(page.courseId)
-      if (course) {
-        await idb.put(idb.STORE_COURSES, { ...course, updated: new Date().toISOString() })
-      }
     }
   },
 
@@ -252,7 +277,14 @@ export const estudosRepository = {
       updated: nowIso,
     }
 
-    await idb.put(idb.STORE_STUDY_CERTIFICATES, fullCert)
+    await idb.runTransaction(
+      [idb.STORE_STUDY_CERTIFICATES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_CERTIFICATES).put(fullCert)
+        recordOutboxInTx(tx, 'certificate', fullCert.id, 'upsert', fullCert)
+      },
+    )
     return fullCert
   },
 
@@ -267,12 +299,26 @@ export const estudosRepository = {
       title: newTitle.trim(),
       updated: new Date().toISOString(),
     }
-    await idb.put(idb.STORE_STUDY_CERTIFICATES, updated)
+    await idb.runTransaction(
+      [idb.STORE_STUDY_CERTIFICATES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_CERTIFICATES).put(updated)
+        recordOutboxInTx(tx, 'certificate', updated.id, 'upsert', updated)
+      },
+    )
     return updated
   },
 
   async deleteCertificate(id: string): Promise<void> {
-    await idb.delete(idb.STORE_STUDY_CERTIFICATES, id)
+    await idb.runTransaction(
+      [idb.STORE_STUDY_CERTIFICATES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_CERTIFICATES).delete(id)
+        recordOutboxInTx(tx, 'certificate', id, 'delete')
+      },
+    )
   },
 
   // ========================
@@ -301,7 +347,14 @@ export const estudosRepository = {
       updated: nowIso,
     }
 
-    await idb.put(idb.STORE_STUDY_SESSIONS, fullSession)
+    await idb.runTransaction(
+      [idb.STORE_STUDY_SESSIONS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_SESSIONS).put(fullSession)
+        recordOutboxInTx(tx, 'studySession', fullSession.id, 'upsert', fullSession)
+      },
+    )
 
     // Lembra o último curso usado no registro rápido
     try {
@@ -314,7 +367,14 @@ export const estudosRepository = {
   },
 
   async deleteSession(id: string): Promise<void> {
-    await idb.delete(idb.STORE_STUDY_SESSIONS, id)
+    await idb.runTransaction(
+      [idb.STORE_STUDY_SESSIONS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_STUDY_SESSIONS).delete(id)
+        recordOutboxInTx(tx, 'studySession', id, 'delete')
+      },
+    )
   },
 
   getLastCourseUsedForTime(): string | null {
@@ -365,7 +425,14 @@ export const estudosRepository = {
         history: [...(existing.history || []), historyEntry],
         updated: nowIso,
       }
-      await idb.put(idb.STORE_STUDY_GOALS, updated)
+      await idb.runTransaction(
+        [idb.STORE_STUDY_GOALS, idb.STORE_SYNC_OUTBOX],
+        'readwrite',
+        (tx) => {
+          tx.objectStore(idb.STORE_STUDY_GOALS).put(updated)
+          recordOutboxInTx(tx, 'studyGoal', updated.id, 'upsert', updated)
+        },
+      )
       return updated
     }
 
@@ -379,14 +446,24 @@ export const estudosRepository = {
       updated: nowIso,
     }
 
-    await idb.put(idb.STORE_STUDY_GOALS, newGoal)
+    await idb.runTransaction([idb.STORE_STUDY_GOALS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_STUDY_GOALS).put(newGoal)
+      recordOutboxInTx(tx, 'studyGoal', newGoal.id, 'upsert', newGoal)
+    })
     return newGoal
   },
 
   async removeCourseGoal(courseId: string): Promise<void> {
     const existing = await this.getGoalByCourse(courseId)
     if (existing) {
-      await idb.delete(idb.STORE_STUDY_GOALS, existing.id)
+      await idb.runTransaction(
+        [idb.STORE_STUDY_GOALS, idb.STORE_SYNC_OUTBOX],
+        'readwrite',
+        (tx) => {
+          tx.objectStore(idb.STORE_STUDY_GOALS).delete(existing.id)
+          recordOutboxInTx(tx, 'studyGoal', existing.id, 'delete')
+        },
+      )
     }
   },
 

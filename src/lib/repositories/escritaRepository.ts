@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { EscritaNote } from '../types'
+import { recordOutboxInTx } from '../sync/outboxHelper'
 
 export const escritaRepository = {
   async getNotes(): Promise<EscritaNote[]> {
@@ -28,48 +29,57 @@ export const escritaRepository = {
     const cleanTags = (data.tags || []).slice(0, 5)
     const isEmpty = !trimmedTitle && !trimmedBody && cleanTags.length === 0
 
-    return idb.runTransaction<EscritaNote | null>(idb.STORE_ESCRITA, 'readwrite', (tx) => {
-      return new Promise<EscritaNote | null>((resolve, reject) => {
-        const store = tx.objectStore(idb.STORE_ESCRITA)
-        const index = store.index('date')
-        const getReq = index.get(date)
+    return idb.runTransaction<EscritaNote | null>(
+      [idb.STORE_ESCRITA, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        return new Promise<EscritaNote | null>((resolve, reject) => {
+          const store = tx.objectStore(idb.STORE_ESCRITA)
+          const index = store.index('date')
+          const getReq = index.get(date)
 
-        getReq.onerror = () => reject(getReq.error)
-        getReq.onsuccess = () => {
-          const existing = getReq.result as EscritaNote | undefined
+          getReq.onerror = () => reject(getReq.error)
+          getReq.onsuccess = () => {
+            const existing = getReq.result as EscritaNote | undefined
 
-          if (isEmpty) {
-            if (existing) {
-              const delReq = store.delete(existing.id)
-              delReq.onerror = () => reject(delReq.error)
-              delReq.onsuccess = () => resolve(null)
-            } else {
-              resolve(null)
+            if (isEmpty) {
+              if (existing) {
+                const delReq = store.delete(existing.id)
+                recordOutboxInTx(tx, 'note', existing.id, 'delete')
+                delReq.onerror = () => reject(delReq.error)
+                delReq.onsuccess = () => resolve(null)
+              } else {
+                resolve(null)
+              }
+              return
             }
-            return
-          }
 
-          const now = new Date().toISOString()
-          const note: EscritaNote = {
-            id: existing ? existing.id : crypto.randomUUID(),
-            date,
-            title: trimmedTitle,
-            body: data.body,
-            tags: cleanTags,
-            created: existing ? existing.created : now,
-            updated: now,
-          }
+            const now = new Date().toISOString()
+            const note: EscritaNote = {
+              id: existing ? existing.id : crypto.randomUUID(),
+              date,
+              title: trimmedTitle,
+              body: data.body,
+              tags: cleanTags,
+              created: existing ? existing.created : now,
+              updated: now,
+            }
 
-          const putReq = store.put(note)
-          putReq.onerror = () => reject(putReq.error)
-          putReq.onsuccess = () => resolve(note)
-        }
-      })
-    })
+            const putReq = store.put(note)
+            recordOutboxInTx(tx, 'note', note.id, 'upsert', note)
+            putReq.onerror = () => reject(putReq.error)
+            putReq.onsuccess = () => resolve(note)
+          }
+        })
+      },
+    )
   },
 
   async deleteNote(id: string): Promise<void> {
-    await idb.delete(idb.STORE_ESCRITA, id)
+    await idb.runTransaction([idb.STORE_ESCRITA, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_ESCRITA).delete(id)
+      recordOutboxInTx(tx, 'note', id, 'delete')
+    })
   },
 
   async searchNotes(query: string): Promise<EscritaNote[]> {

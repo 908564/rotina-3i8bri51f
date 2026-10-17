@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { getTodayDateKey, getDaysAgoKey, subDaysFromDateKey } from '../dateUtils'
+import { recordOutboxInTx } from '../sync/outboxHelper'
 import {
   Livro,
   LivroMeta,
@@ -117,7 +118,10 @@ export const leituraRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_LIVROS, livro)
+    await idb.runTransaction([idb.STORE_LIVROS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_LIVROS).put(livro)
+      recordOutboxInTx(tx, 'book', livro.id, 'upsert', livro)
+    })
     return livro
   },
 
@@ -148,7 +152,10 @@ export const leituraRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_LIVROS, updatedLivro)
+    await idb.runTransaction([idb.STORE_LIVROS, idb.STORE_SYNC_OUTBOX], 'readwrite', (tx) => {
+      tx.objectStore(idb.STORE_LIVROS).put(updatedLivro)
+      recordOutboxInTx(tx, 'book', updatedLivro.id, 'upsert', updatedLivro)
+    })
     return updatedLivro
   },
 
@@ -160,19 +167,27 @@ export const leituraRepository = {
     ])
 
     await idb.runTransaction(
-      [idb.STORE_LIVROS, idb.STORE_LIVRO_ANOTACOES, idb.STORE_LEITURA_HISTORICO],
+      [
+        idb.STORE_LIVROS,
+        idb.STORE_LIVRO_ANOTACOES,
+        idb.STORE_LEITURA_HISTORICO,
+        idb.STORE_SYNC_OUTBOX,
+      ],
       'readwrite',
       (tx) => {
         tx.objectStore(idb.STORE_LIVROS).delete(id)
+        recordOutboxInTx(tx, 'book', id, 'delete')
 
         const anotacoesStore = tx.objectStore(idb.STORE_LIVRO_ANOTACOES)
         for (const a of anotacoes) {
           anotacoesStore.delete(a.id)
+          recordOutboxInTx(tx, 'bookNote', a.id, 'delete')
         }
 
         const histStore = tx.objectStore(idb.STORE_LEITURA_HISTORICO)
         for (const h of historico) {
           histStore.delete(h.id)
+          recordOutboxInTx(tx, 'readingLog', h.id, 'delete')
         }
       },
     )
@@ -205,12 +220,26 @@ export const leituraRepository = {
       updated: now,
     }
 
-    await idb.put(idb.STORE_LIVRO_ANOTACOES, anotacao)
+    await idb.runTransaction(
+      [idb.STORE_LIVRO_ANOTACOES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_LIVRO_ANOTACOES).put(anotacao)
+        recordOutboxInTx(tx, 'bookNote', anotacao.id, 'upsert', anotacao)
+      },
+    )
     return anotacao
   },
 
   async deleteAnotacao(id: string): Promise<void> {
-    await idb.delete(idb.STORE_LIVRO_ANOTACOES, id)
+    await idb.runTransaction(
+      [idb.STORE_LIVRO_ANOTACOES, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_LIVRO_ANOTACOES).delete(id)
+        recordOutboxInTx(tx, 'bookNote', id, 'delete')
+      },
+    )
   },
 
   // Histórico
@@ -278,7 +307,17 @@ export const leituraRepository = {
       status: newStatus,
       updated: now.toISOString(),
     }
-    await idb.put(idb.STORE_LIVROS, updatedLivro)
+
+    await idb.runTransaction(
+      [idb.STORE_LEITURA_HISTORICO, idb.STORE_LIVROS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_LEITURA_HISTORICO).put(historyEntry)
+        tx.objectStore(idb.STORE_LIVROS).put(updatedLivro)
+        recordOutboxInTx(tx, 'readingLog', historyEntry.id, 'upsert', historyEntry)
+        recordOutboxInTx(tx, 'book', updatedLivro.id, 'upsert', updatedLivro)
+      },
+    )
 
     return { history: historyEntry, book: updatedLivro }
   },
@@ -286,28 +325,39 @@ export const leituraRepository = {
   async deleteHistoricoEntry(id: string): Promise<void> {
     const entry = await idb.get<LeituraHistorico>(idb.STORE_LEITURA_HISTORICO, id)
     if (!entry) return
-    await idb.delete(idb.STORE_LEITURA_HISTORICO, id)
 
     // Recalcular página do livro a partir dos registros restantes
-    const remaining = await this.getHistoricoByBook(entry.bookId)
+    const remaining = (await this.getHistoricoByBook(entry.bookId)).filter((h) => h.id !== id)
     const livro = await this.getLivroById(entry.bookId)
-    if (livro) {
-      const recalculatedPage = remaining.reduce((acc, curr) => acc + curr.pagesAdded, 0)
-      const finalPage = livro.totalPages
-        ? Math.min(livro.totalPages, recalculatedPage)
-        : recalculatedPage
-      let status = livro.status
-      if (finalPage === 0) status = 'quero_ler'
-      else if (livro.totalPages && finalPage >= livro.totalPages) status = 'concluido'
-      else status = 'lendo'
 
-      await idb.put(idb.STORE_LIVROS, {
-        ...livro,
-        currentPage: finalPage,
-        status,
-        updated: new Date().toISOString(),
-      })
-    }
+    await idb.runTransaction(
+      [idb.STORE_LEITURA_HISTORICO, idb.STORE_LIVROS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_LEITURA_HISTORICO).delete(id)
+        recordOutboxInTx(tx, 'readingLog', id, 'delete')
+
+        if (livro) {
+          const recalculatedPage = remaining.reduce((acc, curr) => acc + curr.pagesAdded, 0)
+          const finalPage = livro.totalPages
+            ? Math.min(livro.totalPages, recalculatedPage)
+            : recalculatedPage
+          let status = livro.status
+          if (finalPage === 0) status = 'quero_ler'
+          else if (livro.totalPages && finalPage >= livro.totalPages) status = 'concluido'
+          else status = 'lendo'
+
+          const updatedLivro: Livro = {
+            ...livro,
+            currentPage: finalPage,
+            status,
+            updated: new Date().toISOString(),
+          }
+          tx.objectStore(idb.STORE_LIVROS).put(updatedLivro)
+          recordOutboxInTx(tx, 'book', updatedLivro.id, 'upsert', updatedLivro)
+        }
+      },
+    )
   },
 
   // Metas dinâmicas consolidadas e por livro

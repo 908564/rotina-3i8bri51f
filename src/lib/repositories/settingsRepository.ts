@@ -37,6 +37,10 @@ export const settingsRepository = {
 
   saveSettings(settings: AppSettings): void {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+    // Enfileira settings no outbox
+    import('../sync/outboxHelper').then(({ recordOutboxStandalone }) => {
+      recordOutboxStandalone('settings', 'app_settings', 'upsert', settings).catch(() => {})
+    })
   },
 
   updateSettings(partial: Partial<AppSettings>): AppSettings {

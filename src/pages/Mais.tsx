@@ -52,6 +52,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { AuthModal } from '@/components/auth/AuthModal'
+import { Cloud, CloudOff, RefreshCw, LogOut, User as UserIcon } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import pb from '@/lib/pocketbase/client'
 
 export default function MaisPage() {
   const {
@@ -71,6 +76,20 @@ export default function MaisPage() {
     module: ModuleKey
     pendingActive: boolean
   } | null>(null)
+
+  // Conta & Sincronização na nuvem
+  const { user, syncMeta, triggerSync, signOut } = useAuth()
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalMode, setAuthModalMode] = useState<'welcome' | 'signin' | 'signup' | 'forgot'>(
+    'signin',
+  )
+  const [syncingManual, setSyncingManual] = useState(false)
+  const [signOutDialogOpen, setSignOutDialogOpen] = useState(false)
+  const [signOutKeepLocal, setSignOutKeepLocal] = useState(true)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteKeepLocal, setDeleteKeepLocal] = useState(true)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   // Storage info (cota e persistência)
   const [isPersisted, setIsPersisted] = useState<boolean | null>(null)
@@ -445,6 +464,149 @@ export default function MaisPage() {
         <h1 className="text-xl font-bold tracking-tight text-foreground">Mais</h1>
       </div>
 
+      {/* SEÇÃO CONTA & SINCRONIZAÇÃO NA NUVEM */}
+      <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
+        <CardContent className="p-4 sm:p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Cloud className="w-3.5 h-3.5 text-[#F59E4C]" /> Conta & Sincronização
+            </span>
+            {user && (
+              <span
+                className={cn(
+                  'text-[10px] px-2 py-0.5 rounded-full font-bold',
+                  user.verified
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                )}
+              >
+                {user.verified ? 'Verificado' : 'Aguardando confirmação'}
+              </span>
+            )}
+          </div>
+
+          {user ? (
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-background border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <UserIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                    {user.name || 'Usuário Rotina'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{user.email}</div>
+                </div>
+
+                <div className="text-left sm:text-right">
+                  <div className="text-[11px] text-muted-foreground">
+                    {syncMeta.status === 'syncing' ? (
+                      <span className="text-[#F59E4C] flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin" /> Sincronizando...
+                      </span>
+                    ) : syncMeta.status === 'offline' ? (
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <CloudOff className="w-3 h-3" /> Offline: alterações salvas no aparelho
+                      </span>
+                    ) : syncMeta.lastSyncedAt ? (
+                      `Sincronizado às ${new Date(syncMeta.lastSyncedAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}`
+                    ) : (
+                      'Aguardando sincronização'
+                    )}
+                  </div>
+                  {syncMeta.lastError && (
+                    <div className="text-[10px] text-red-500 mt-0.5 max-w-[220px] truncate">
+                      {syncMeta.lastError}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Button
+                  onClick={async () => {
+                    setSyncingManual(true)
+                    await triggerSync()
+                    setSyncingManual(false)
+                    toast({ title: 'Sincronização', description: 'Processo concluído.' })
+                  }}
+                  disabled={syncingManual || syncMeta.status === 'syncing'}
+                  className="h-11 rounded-xl text-xs font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+                >
+                  <RefreshCw
+                    className={cn(
+                      'w-4 h-4 mr-1.5',
+                      (syncingManual || syncMeta.status === 'syncing') && 'animate-spin',
+                    )}
+                  />
+                  Sincronizar agora
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSignOutDialogOpen(true)}
+                  className="h-11 rounded-xl text-xs font-semibold border-border"
+                >
+                  <LogOut className="w-4 h-4 mr-1.5" />
+                  Sair da conta
+                </Button>
+              </div>
+
+              <div className="pt-1 flex items-center justify-between text-xs border-t border-border/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthModalMode('forgot')
+                    setAuthModalOpen(true)
+                  }}
+                  className="text-muted-foreground hover:text-foreground text-[11px] underline"
+                >
+                  Alterar senha
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmText('')
+                    setDeleteDialogOpen(true)
+                  }}
+                  className="text-red-500 hover:text-red-600 text-[11px] font-semibold"
+                >
+                  Excluir minha conta
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Você está no <strong>modo sem conta</strong> (dados salvos apenas neste aparelho).
+                Crie ou entre na sua conta para sincronizar entre seus aparelhos.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  onClick={() => {
+                    setAuthModalMode('signin')
+                    setAuthModalOpen(true)
+                  }}
+                  className="h-11 flex-1 rounded-xl text-xs font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+                >
+                  Entrar na conta
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setAuthModalMode('signup')
+                    setAuthModalOpen(true)
+                  }}
+                  className="h-11 flex-1 rounded-xl text-xs font-semibold border-border"
+                >
+                  Criar conta (convidados)
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* 1. SEÇÃO APARÊNCIA */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
@@ -697,11 +859,20 @@ export default function MaisPage() {
       </Card>
 
       {/* SOBRE / PWA INFORMAÇÕES */}
-      <div className="text-center text-xs text-muted-foreground space-y-1 pt-2">
+      <div className="text-center text-xs text-muted-foreground space-y-1.5 pt-2">
         <p className="font-semibold text-foreground">
-          Rotina v{APP_VERSION} • Mobile-first SPA Offline
+          Rotina v{APP_VERSION} • Mobile-first SPA Local-first
         </p>
-        <p>Feito para celular e tablet com armazenamento 100% local no seu aparelho.</p>
+        <p>Armazenamento local no aparelho com sincronização na nuvem.</p>
+        <div className="space-x-2 text-[11px]">
+          <a href="/termos" target="_blank" className="hover:underline">
+            Termos de Uso
+          </a>
+          <span>•</span>
+          <a href="/privacidade" target="_blank" className="hover:underline">
+            Privacidade
+          </a>
+        </div>
       </div>
 
       {/* MODAL DE CONFIRMAÇÃO PARA DESATIVAR MÓDULO */}
@@ -903,6 +1074,127 @@ export default function MaisPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL DE AUTENTICAÇÃO */}
+      {authModalOpen && (
+        <AuthModal
+          initialMode={authModalMode}
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
+
+      {/* DIÁLOGO DE SAIR DA CONTA */}
+      <AlertDialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
+        <AlertDialogContent className="rounded-2xl bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Sair da sua conta?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground space-y-3">
+              <span>Você pode continuar usando o app sem conta neste aparelho.</span>
+              <div className="flex items-start gap-2 pt-2 text-foreground">
+                <input
+                  type="checkbox"
+                  id="keep-local-signout"
+                  checked={signOutKeepLocal}
+                  onChange={(e) => setSignOutKeepLocal(e.target.checked)}
+                  className="mt-0.5 accent-[#F59E4C]"
+                />
+                <label htmlFor="keep-local-signout" className="text-xs cursor-pointer">
+                  Manter meus dados salvos neste aparelho (padrão)
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl text-xs">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                await signOut({ keepLocalData: signOutKeepLocal })
+                setSignOutDialogOpen(false)
+                toast({ title: 'Sessão encerrada', description: 'Você saiu da sua conta.' })
+              }}
+              className="rounded-xl text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+            >
+              Sair
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* DIÁLOGO DE EXCLUIR CONTA */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Excluir minha conta
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground space-y-3">
+              <span>
+                Esta ação é irreversível. Todos os seus registros e arquivos na nuvem serão
+                excluídos permanentemente.
+              </span>
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs font-semibold text-foreground block">
+                  Digite <strong>EXCLUIR</strong> para confirmar:
+                </label>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="EXCLUIR"
+                  className="h-10 text-xs rounded-xl font-mono uppercase"
+                />
+              </div>
+              <div className="flex items-start gap-2 pt-1 text-foreground">
+                <input
+                  type="checkbox"
+                  id="keep-local-delete"
+                  checked={deleteKeepLocal}
+                  onChange={(e) => setDeleteKeepLocal(e.target.checked)}
+                  className="mt-0.5 accent-[#F59E4C]"
+                />
+                <label htmlFor="keep-local-delete" className="text-xs cursor-pointer">
+                  Manter cópia local dos dados neste aparelho (como usuário sem conta)
+                </label>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl text-xs">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteConfirmText !== 'EXCLUIR' || deletingAccount}
+              onClick={async () => {
+                setDeletingAccount(true)
+                try {
+                  if (user?.id) {
+                    await pb.collection('users').delete(user.id)
+                  }
+                  await signOut({ keepLocalData: deleteKeepLocal })
+                  if (!deleteKeepLocal) {
+                    await handleClearAll()
+                  }
+                  setDeleteDialogOpen(false)
+                  toast({
+                    title: 'Conta excluída',
+                    description: 'Sua conta e registros na nuvem foram removidos.',
+                  })
+                } catch (err: any) {
+                  toast({
+                    title: 'Falha ao excluir conta',
+                    description: err?.message || 'Erro ao remover conta.',
+                    variant: 'destructive',
+                  })
+                } finally {
+                  setDeletingAccount(false)
+                }
+              }}
+              className="rounded-xl text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+            >
+              {deletingAccount ? 'Excluindo...' : 'Excluir definitivamente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
