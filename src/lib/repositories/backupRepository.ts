@@ -20,6 +20,7 @@ import {
   WorkNote,
   AppSettings,
   ModuleKey,
+  DaySummary,
 } from '../types'
 
 /** Limite máximo padrão para arquivo de backup (150 MB) */
@@ -369,7 +370,13 @@ function sanitizeStudySession(item: any): StudySession | null {
 
 function sanitizeStudyGoal(item: any): StudyGoal | null {
   if (!hasBaseAuditFields(item)) return null
-  if (!isValidUuid(item.courseId) || typeof item.weeklyMinutes !== 'number') return null
+  if (!isValidUuid(item.courseId)) return null
+
+  const weeklyMinutes = typeof item.weeklyMinutes === 'number' ? item.weeklyMinutes : undefined
+  const dailyMinutes = typeof item.dailyMinutes === 'number' ? item.dailyMinutes : undefined
+
+  // Se não tem nem semanal nem diária, não é uma meta válida
+  if (weeklyMinutes === undefined && dailyMinutes === undefined) return null
 
   const history = Array.isArray(item.history)
     ? item.history
@@ -378,7 +385,8 @@ function sanitizeStudyGoal(item: any): StudyGoal | null {
           id: isValidUuid(h.id) ? h.id : crypto.randomUUID(),
           courseId: item.courseId,
           effectiveDate: h.effectiveDate,
-          weeklyMinutes: typeof h.weeklyMinutes === 'number' ? h.weeklyMinutes : item.weeklyMinutes,
+          weeklyMinutes: typeof h.weeklyMinutes === 'number' ? h.weeklyMinutes : weeklyMinutes,
+          dailyMinutes: typeof h.dailyMinutes === 'number' ? h.dailyMinutes : dailyMinutes,
           created: isValidIsoDate(h.created) ? h.created : item.created,
         }))
     : []
@@ -386,10 +394,26 @@ function sanitizeStudyGoal(item: any): StudyGoal | null {
   return {
     id: item.id,
     courseId: item.courseId,
-    weeklyMinutes: item.weeklyMinutes,
+    weeklyMinutes,
+    dailyMinutes,
     history,
     created: item.created,
     updated: item.updated,
+  }
+}
+
+function sanitizeDaySummary(item: any): DaySummary | null {
+  if (!item || typeof item !== 'object') return null
+  if (typeof item.date !== 'string' || !item.date.match(/^\d{4}-\d{2}-\d{2}$/)) return null
+  if (!isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt)) return null
+
+  return {
+    date: item.date,
+    goalsTotal: typeof item.goalsTotal === 'number' ? Math.max(0, item.goalsTotal) : 0,
+    goalsDone: typeof item.goalsDone === 'number' ? Math.max(0, item.goalsDone) : 0,
+    closed: Boolean(item.closed),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   }
 }
 
@@ -526,6 +550,7 @@ function sanitizeSettings(item: any): AppSettings | undefined {
     theme: validThemes,
     activeModules,
     hasSeenOnboarding: Boolean(item.hasSeenOnboarding ?? true),
+    firstTimeWelcomeDismissed: Boolean(item.firstTimeWelcomeDismissed ?? false),
     userName: typeof item.userName === 'string' ? item.userName : '',
   }
 }
@@ -549,6 +574,7 @@ export const backupRepository = {
       { key: 'achievements', store: idb.STORE_ACHIEVEMENTS },
       { key: 'experiences', store: idb.STORE_EXPERIENCES },
       { key: 'work_notes', store: idb.STORE_WORK_NOTES },
+      { key: 'day_summaries', store: idb.STORE_DAY_SUMMARIES },
     ]
 
     for (const { key, store } of stores) {
@@ -575,6 +601,7 @@ export const backupRepository = {
     const achievements = await idb.getAll<Achievement>(idb.STORE_ACHIEVEMENTS)
     const experiences = await idb.getAll<Experience>(idb.STORE_EXPERIENCES)
     const work_notes = await idb.getAll<WorkNote>(idb.STORE_WORK_NOTES)
+    const day_summaries = await idb.getAll<DaySummary>(idb.STORE_DAY_SUMMARIES)
 
     if (options?.omitAttachments) {
       livros = livros.map((book) => {
@@ -606,6 +633,7 @@ export const backupRepository = {
         achievements,
         experiences,
         work_notes,
+        day_summaries,
       },
     }
   },
@@ -721,6 +749,11 @@ export const backupRepository = {
       sanitizeExperience,
     )
     const sanitizedWorkNotes = processCollection(cols.work_notes, 'work_notes', sanitizeWorkNote)
+    const sanitizedDaySummaries = processCollection(
+      cols.day_summaries,
+      'day_summaries',
+      sanitizeDaySummary,
+    )
 
     const validPayload: ExportDataPayload = {
       schemaVersion: BACKUP_SCHEMA_VERSION,
@@ -743,6 +776,7 @@ export const backupRepository = {
         achievements: sanitizedAchievements,
         experiences: sanitizedExperiences,
         work_notes: sanitizedWorkNotes,
+        day_summaries: sanitizedDaySummaries,
       },
     }
 
@@ -787,6 +821,7 @@ export const backupRepository = {
       idb.STORE_ACHIEVEMENTS,
       idb.STORE_EXPERIENCES,
       idb.STORE_WORK_NOTES,
+      idb.STORE_DAY_SUMMARIES,
     ]
 
     let totalImported = 0
@@ -906,6 +941,14 @@ export const backupRepository = {
           totalImported++
         }
       }
+
+      if (c.day_summaries) {
+        const storeDaySummaries = tx.objectStore(idb.STORE_DAY_SUMMARIES)
+        for (const item of c.day_summaries) {
+          storeDaySummaries.put(item)
+          totalImported++
+        }
+      }
     })
 
     // Salva configurações após sucesso da transação de banco
@@ -937,6 +980,7 @@ export const backupRepository = {
       idb.STORE_ACHIEVEMENTS,
       idb.STORE_EXPERIENCES,
       idb.STORE_WORK_NOTES,
+      idb.STORE_DAY_SUMMARIES,
     ]
 
     await idb.runTransaction(allStores, 'readwrite', (tx) => {
@@ -950,6 +994,7 @@ export const backupRepository = {
     settingsRepository.saveSettings({
       ...current,
       hasSeenOnboarding: true,
+      firstTimeWelcomeDismissed: true,
     })
 
     // Remove todas as chaves de localStorage usadas pelo app

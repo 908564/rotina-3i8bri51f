@@ -5,6 +5,7 @@ import { estudosRepository } from './estudosRepository'
 import { trabalhoRepository } from './trabalhoRepository'
 import { settingsRepository } from './settingsRepository'
 import { getTodayDateKey, getLocalDayOfWeek } from '../dateUtils'
+import { getFastTodayData, FastTodayData } from './hojeAggregator'
 import {
   EscritaNote,
   TreinoPlanoSemanal,
@@ -15,6 +16,8 @@ import {
   Project,
   ProjectTask,
 } from '../types'
+
+export type { FastTodayData }
 
 export interface TodayOverview {
   dateStr: string // YYYY-MM-DD
@@ -56,6 +59,10 @@ export interface TodayOverview {
 }
 
 export const hojeRepository = {
+  async getFastTodayData(dateStr?: string): Promise<FastTodayData> {
+    return getFastTodayData(dateStr)
+  },
+
   async getTodayOverview(): Promise<TodayOverview> {
     const dateStr = getTodayDateKey()
     const dayOfWeek = getLocalDayOfWeek()

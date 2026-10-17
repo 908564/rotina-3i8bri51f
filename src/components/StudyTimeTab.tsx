@@ -48,10 +48,13 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
   const [sessionNotes, setSessionNotes] = useState('')
   const [savingSession, setSavingSession] = useState(false)
 
-  // Modal de meta semanal (único ponto de entrada para definir/editar meta deste curso)
+  // Modal de meta de estudo (semanal e diária - único ponto de entrada para definir/editar meta deste curso)
   const [goalModalOpen, setGoalModalOpen] = useState(false)
-  const [goalMinutesInput, setGoalMinutesInput] = useState(
-    goalProgress?.weeklyMinutesTarget ? String(goalProgress.weeklyMinutesTarget) : '180',
+  const [weeklyMinutesInput, setWeeklyMinutesInput] = useState(
+    goalProgress?.weeklyMinutesTarget ? String(goalProgress.weeklyMinutesTarget) : '',
+  )
+  const [dailyMinutesInput, setDailyMinutesInput] = useState(
+    goalProgress?.dailyMinutesTarget ? String(goalProgress.dailyMinutesTarget) : '',
   )
   const [savingGoal, setSavingGoal] = useState(false)
 
@@ -103,22 +106,36 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
 
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault()
-    const mins = Number(goalMinutesInput)
-    if (isNaN(mins) || mins <= 0) {
+    const weeklyMins = weeklyMinutesInput.trim() ? Number(weeklyMinutesInput) : undefined
+    const dailyMins = dailyMinutesInput.trim() ? Number(dailyMinutesInput) : undefined
+
+    if (
+      (weeklyMins !== undefined && (isNaN(weeklyMins) || weeklyMins <= 0)) ||
+      (dailyMins !== undefined && (isNaN(dailyMins) || dailyMins <= 0))
+    ) {
       toast({
         title: 'Meta inválida',
-        description: 'Defina um número positivo de minutos semanais.',
+        description: 'Defina números positivos de minutos para as metas.',
         variant: 'destructive',
       })
       return
     }
 
+    if (!weeklyMins && !dailyMins) {
+      // Remove a meta se ambos forem limpos
+      await handleRemoveGoal()
+      return
+    }
+
     setSavingGoal(true)
     try {
-      await estudosRepository.saveCourseGoal(course.id, mins)
+      await estudosRepository.saveCourseGoal(course.id, {
+        weeklyMinutes: weeklyMins,
+        dailyMinutes: dailyMins,
+      })
       toast({
-        title: 'Meta semanal atualizada! 🎯',
-        description: `Meta de ${mins} min/semana salva com histórico de alterações.`,
+        title: 'Meta atualizada! 🎯',
+        description: 'Metas salvas com histórico de alterações.',
       })
       setGoalModalOpen(false)
       onRefresh()
@@ -131,7 +148,7 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
     await estudosRepository.removeCourseGoal(course.id)
     toast({
       title: 'Meta removida',
-      description: 'Este curso continuará sem meta semanal.',
+      description: 'Este curso continuará sem metas definidas.',
     })
     setGoalModalOpen(false)
     onRefresh()
@@ -140,10 +157,17 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
   // Estatísticas do curso
   const weekMinutes = goalProgress?.weekMinutes || 0
   const monthMinutes = goalProgress?.monthMinutes || 0
-  const hasGoal = Boolean(goalProgress?.hasGoal && goalProgress.weeklyMinutesTarget)
-  const target = goalProgress?.weeklyMinutesTarget || 0
+  const todayMinutes = goalProgress?.todayMinutes || 0
+  const weeklyTarget = goalProgress?.weeklyMinutesTarget || 0
+  const dailyTarget = goalProgress?.dailyMinutesTarget || 0
+  const hasWeeklyGoal = Boolean(weeklyTarget > 0)
+  const hasDailyGoal = Boolean(dailyTarget > 0)
+  const hasAnyGoal = hasWeeklyGoal || hasDailyGoal
+
   const weekProgressPercent =
-    target > 0 ? Math.min(100, Math.round((weekMinutes / target) * 100)) : 0
+    weeklyTarget > 0 ? Math.min(100, Math.round((weekMinutes / weeklyTarget) * 100)) : 0
+  const dailyProgressPercent =
+    dailyTarget > 0 ? Math.min(100, Math.round((todayMinutes / dailyTarget) * 100)) : 0
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -208,12 +232,13 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
             <h4 className="text-sm font-bold text-foreground">Meta de Estudo</h4>
           </div>
 
-          {hasGoal && (
+          {hasAnyGoal && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
-                setGoalMinutesInput(String(target))
+                setWeeklyMinutesInput(weeklyTarget > 0 ? String(weeklyTarget) : '')
+                setDailyMinutesInput(dailyTarget > 0 ? String(dailyTarget) : '')
                 setGoalModalOpen(true)
               }}
               className="text-xs h-8 text-[#8B5CF6] hover:bg-[#8B5CF6]/10 font-semibold"
@@ -223,41 +248,72 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
           )}
         </div>
 
-        {hasGoal ? (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-foreground">
-                Progresso Semanal: {weekMinutes} / {target} min
-              </span>
-              <span className="text-[#8B5CF6] font-bold text-xs">{weekProgressPercent}%</span>
-            </div>
+        {hasAnyGoal ? (
+          <div className="space-y-4">
+            {/* Meta diária */}
+            {hasDailyGoal && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">
+                    Progresso Diário: {todayMinutes} / {dailyTarget} min
+                  </span>
+                  <span className="text-[#8B5CF6] font-bold text-xs">{dailyProgressPercent}%</span>
+                </div>
+                <Progress
+                  value={dailyProgressPercent}
+                  className="h-2 bg-muted [&>div]:bg-[#8B5CF6] rounded-full"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {todayMinutes >= dailyTarget ? (
+                    <span className="text-[#3D9C73] font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Meta diária de hoje atingida!
+                    </span>
+                  ) : (
+                    <span>Faltam {dailyTarget - todayMinutes} minutos para a meta de hoje.</span>
+                  )}
+                </p>
+              </div>
+            )}
 
-            <Progress
-              value={weekProgressPercent}
-              className="h-2 bg-muted [&>div]:bg-[#8B5CF6] rounded-full"
-            />
-
-            <p className="text-[11px] text-muted-foreground">
-              {weekMinutes >= target ? (
-                <span className="text-[#3D9C73] font-semibold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Meta semanal atingida para este curso!
-                </span>
-              ) : (
-                <span>
-                  Faltam {target - weekMinutes} minutos para completar sua meta esta semana.
-                </span>
-              )}
-            </p>
+            {/* Meta semanal */}
+            {hasWeeklyGoal && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">
+                    Progresso Semanal: {weekMinutes} / {weeklyTarget} min
+                  </span>
+                  <span className="text-[#8B5CF6] font-bold text-xs">{weekProgressPercent}%</span>
+                </div>
+                <Progress
+                  value={weekProgressPercent}
+                  className="h-2 bg-muted [&>div]:bg-[#8B5CF6] rounded-full"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {weekMinutes >= weeklyTarget ? (
+                    <span className="text-[#3D9C73] font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Meta semanal atingida para este
+                      curso!
+                    </span>
+                  ) : (
+                    <span>
+                      Faltam {weeklyTarget - weekMinutes} minutos para completar sua meta esta
+                      semana.
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-xl bg-muted/30 border border-dashed border-border/80 p-3.5 space-y-2">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Você ainda não definiu uma meta semanal para este curso. Estabeleça minutos semanais
+              Você ainda não definiu metas para este curso. Estabeleça metas diárias e/ou semanais
               para acompanhar sua evolução de forma consistente.
             </p>
             <Button
               onClick={() => {
-                setGoalMinutesInput('180')
+                setWeeklyMinutesInput('180')
+                setDailyMinutesInput('')
                 setGoalModalOpen(true)
               }}
               variant="outline"
@@ -405,38 +461,77 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DEFINIR / EDITAR META SEMANAL */}
+      {/* MODAL DEFINIR / EDITAR METAS DE ESTUDO */}
       <Dialog open={goalModalOpen} onOpenChange={setGoalModalOpen}>
         <DialogContent className="sm:max-w-md bg-card rounded-2xl p-5 sm:p-6 border border-border">
           <DialogHeader className="text-left space-y-1">
             <div className="flex items-center gap-2 text-[#8B5CF6]">
               <Target className="w-5 h-5" />
               <span className="text-xs font-bold uppercase tracking-wider">
-                {hasGoal ? 'Editar Meta' : 'Definir Meta'}
+                {hasAnyGoal ? 'Editar Metas' : 'Definir Metas'}
               </span>
             </div>
-            <DialogTitle className="text-lg font-bold">Meta Semanal de Estudo</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Metas de Estudo</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSaveGoal} className="space-y-4 pt-1">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Defina quantos minutos por semana você deseja dedicar a este curso. Alterações nesta
-              meta não recalculam o histórico passado (guardamos a vigência de cada período).
+              Defina metas diárias e/ou semanais independentes. Ambas são opcionais. Alterações não
+              recalculam dias passados.
             </p>
 
+            {/* Meta Diária */}
             <div className="space-y-1.5">
-              <Label htmlFor="goal-mins" className="text-xs font-semibold">
-                Meta semanal (minutos) *
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="goal-daily-mins" className="text-xs font-semibold">
+                  Meta diária (minutos)
+                </Label>
+                <span className="text-[10px] text-muted-foreground uppercase font-medium">
+                  Opcional
+                </span>
+              </div>
+              <Input
+                id="goal-daily-mins"
+                type="number"
+                min="1"
+                placeholder="Ex.: 45"
+                value={dailyMinutesInput}
+                onChange={(e) => setDailyMinutesInput(e.target.value)}
+                className="rounded-xl text-xs sm:text-sm bg-background font-bold"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[15, 30, 45, 60, 90].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setDailyMinutesInput(String(mins))}
+                    className="px-2 py-0.5 text-[11px] rounded-lg border border-border hover:bg-muted text-muted-foreground font-medium"
+                  >
+                    {mins}m/dia
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Meta Semanal */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="goal-mins" className="text-xs font-semibold">
+                  Meta semanal (minutos)
+                </Label>
+                <span className="text-[10px] text-muted-foreground uppercase font-medium">
+                  Opcional
+                </span>
+              </div>
               <Input
                 id="goal-mins"
                 type="number"
                 min="1"
                 placeholder="Ex.: 180 (3 horas)"
-                value={goalMinutesInput}
-                onChange={(e) => setGoalMinutesInput(e.target.value)}
+                value={weeklyMinutesInput}
+                onChange={(e) => setWeeklyMinutesInput(e.target.value)}
                 className="rounded-xl text-xs sm:text-sm bg-background font-bold"
-                autoFocus
               />
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {[
@@ -448,8 +543,8 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
                   <button
                     key={preset.m}
                     type="button"
-                    onClick={() => setGoalMinutesInput(String(preset.m))}
-                    className="px-2.5 py-1 text-[11px] rounded-lg border border-border hover:bg-muted text-muted-foreground font-medium"
+                    onClick={() => setWeeklyMinutesInput(String(preset.m))}
+                    className="px-2 py-0.5 text-[11px] rounded-lg border border-border hover:bg-muted text-muted-foreground font-medium"
                   >
                     {preset.label}
                   </button>
@@ -458,7 +553,7 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
             </div>
 
             <DialogFooter className="pt-2 flex flex-row gap-2 justify-between items-center">
-              {hasGoal ? (
+              {hasAnyGoal ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -466,7 +561,7 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
                   disabled={savingGoal}
                   className="h-10 text-destructive hover:bg-destructive/10 text-xs px-3 rounded-xl"
                 >
-                  Remover meta
+                  Remover metas
                 </Button>
               ) : (
                 <div />
@@ -487,7 +582,7 @@ export const StudyTimeTab: React.FC<StudyTimeTabProps> = ({
                   disabled={savingGoal}
                   className="h-10 rounded-xl text-xs px-5 bg-[#8B5CF6] hover:bg-[#8B5CF6]/90 text-white font-semibold"
                 >
-                  {savingGoal ? 'Salvando...' : 'Salvar Meta'}
+                  {savingGoal ? 'Salvando...' : 'Salvar Metas'}
                 </Button>
               </div>
             </DialogFooter>

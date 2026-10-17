@@ -337,23 +337,31 @@ export const estudosRepository = {
     return idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS)
   },
 
-  async saveCourseGoal(courseId: string, weeklyMinutes: number): Promise<StudyGoal> {
+  async saveCourseGoal(
+    courseId: string,
+    params: { weeklyMinutes?: number; dailyMinutes?: number } | number,
+  ): Promise<StudyGoal> {
     const nowIso = new Date().toISOString()
     const today = getTodayDateKey()
     const existing = await this.getGoalByCourse(courseId)
+
+    const weekly = typeof params === 'number' ? params : params.weeklyMinutes
+    const daily = typeof params === 'object' ? params.dailyMinutes : undefined
 
     const historyEntry: StudyGoalHistory = {
       id: crypto.randomUUID(),
       courseId,
       effectiveDate: today,
-      weeklyMinutes,
+      weeklyMinutes: weekly,
+      dailyMinutes: daily,
       created: nowIso,
     }
 
     if (existing) {
       const updated: StudyGoal = {
         ...existing,
-        weeklyMinutes,
+        weeklyMinutes: weekly,
+        dailyMinutes: daily,
         history: [...(existing.history || []), historyEntry],
         updated: nowIso,
       }
@@ -364,7 +372,8 @@ export const estudosRepository = {
     const newGoal: StudyGoal = {
       id: crypto.randomUUID(),
       courseId,
-      weeklyMinutes,
+      weeklyMinutes: weekly,
+      dailyMinutes: daily,
       history: [historyEntry],
       created: nowIso,
       updated: nowIso,
@@ -385,8 +394,6 @@ export const estudosRepository = {
   getEffectiveWeeklyGoalForDate(goal: StudyGoal, date: string): number | undefined {
     if (!goal) return undefined
     if (!goal.history || goal.history.length === 0) {
-      // Se não há histórico explícito, usa a data de criação (ou do registro) como limite:
-      // se a data for anterior ao dia em que a meta foi criada, o passado não tinha meta.
       const createdDate = goal.created ? goal.created.substring(0, 10) : undefined
       if (createdDate && date < createdDate) {
         return undefined
@@ -396,7 +403,6 @@ export const estudosRepository = {
 
     const sorted = [...goal.history].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
 
-    // Se a data solicitada é anterior à primeiríssima meta estabelecida, naquela época não havia meta
     if (sorted[0].effectiveDate > date) {
       return undefined
     }
@@ -405,6 +411,33 @@ export const estudosRepository = {
     for (const h of sorted) {
       if (h.effectiveDate <= date) {
         effective = h.weeklyMinutes
+      } else {
+        break
+      }
+    }
+    return effective
+  },
+
+  getEffectiveDailyGoalForDate(goal: StudyGoal, date: string): number | undefined {
+    if (!goal) return undefined
+    if (!goal.history || goal.history.length === 0) {
+      const createdDate = goal.created ? goal.created.substring(0, 10) : undefined
+      if (createdDate && date < createdDate) {
+        return undefined
+      }
+      return goal.dailyMinutes
+    }
+
+    const sorted = [...goal.history].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+
+    if (sorted[0].effectiveDate > date) {
+      return undefined
+    }
+
+    let effective: number | undefined = undefined
+    for (const h of sorted) {
+      if (h.effectiveDate <= date) {
+        effective = h.dailyMinutes
       } else {
         break
       }
@@ -438,10 +471,15 @@ export const estudosRepository = {
       .filter((s) => s.date >= monthStartStr && s.date <= todayStr)
       .reduce((sum, s) => sum + s.minutes, 0)
 
+    const hasWeeklyGoal = Boolean(goal && goal.weeklyMinutes && goal.weeklyMinutes > 0)
+    const hasDailyGoal = Boolean(goal && goal.dailyMinutes && goal.dailyMinutes > 0)
+
     return {
       course,
-      hasGoal: Boolean(goal && goal.weeklyMinutes > 0),
+      hasGoal: hasWeeklyGoal || hasDailyGoal,
+      hasDailyGoal,
       weeklyMinutesTarget: goal?.weeklyMinutes,
+      dailyMinutesTarget: goal?.dailyMinutes,
       todayMinutes,
       weekMinutes,
       monthMinutes,

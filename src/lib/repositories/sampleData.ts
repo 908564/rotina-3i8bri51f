@@ -697,17 +697,19 @@ export async function loadSampleData(): Promise<void> {
   }
   await idb.put(idb.STORE_STUDY_CERTIFICATES, sampleCert)
 
-  // Metas semanais de estudo
+  // Metas de estudo com metas diárias coerentes (ex.: 60 e 30 min) e semanais
   const sampleGoal1: StudyGoal = {
     id: crypto.randomUUID(),
     courseId: course1Id,
     weeklyMinutes: 240, // 4 horas por semana
+    dailyMinutes: 60, // 60 min por dia
     history: [
       {
         id: crypto.randomUUID(),
         courseId: course1Id,
         effectiveDate: daysAgo(21),
         weeklyMinutes: 240,
+        dailyMinutes: 60,
         created: nowIso,
       },
     ],
@@ -719,12 +721,14 @@ export async function loadSampleData(): Promise<void> {
     id: crypto.randomUUID(),
     courseId: course2Id,
     weeklyMinutes: 180, // 3 horas por semana
+    dailyMinutes: 30, // 30 min por dia
     history: [
       {
         id: crypto.randomUUID(),
         courseId: course2Id,
         effectiveDate: daysAgo(14),
         weeklyMinutes: 180,
+        dailyMinutes: 30,
         created: nowIso,
       },
     ],

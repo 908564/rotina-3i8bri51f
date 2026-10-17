@@ -186,11 +186,13 @@ export default function EscritaPage() {
     }
   }, [externalDataVersion, currentDate, isDirty, loadNoteForDate, refreshAllNotesDates])
 
-  // Foco automático no corpo de texto se estiver no dia atual
+  // Foco automático no corpo de texto se estiver no dia atual ou se vier da rota com ?focus=1
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
-      if (currentDate === getTodayDateStr()) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const shouldFocus = urlParams.get('focus') === '1' || currentDate === getTodayDateStr()
+      if (shouldFocus) {
         setTimeout(() => {
           textareaRef.current?.focus()
         }, 150)

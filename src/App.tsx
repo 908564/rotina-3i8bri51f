@@ -12,6 +12,8 @@ import TreinoPage from './pages/Treino'
 import EstudosPage from './pages/Estudos'
 import TrabalhoPage from './pages/Trabalho'
 import MaisPage from './pages/Mais'
+import ModulosPage from './pages/Modulos'
+import ResumoPage from './pages/Resumo'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 
@@ -25,6 +27,8 @@ const App = () => (
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<Index />} />
+              <Route path="/modulos" element={<ModulosPage />} />
+              <Route path="/resumo" element={<ResumoPage />} />
               <Route path="/escrita" element={<EscritaPage />} />
               <Route path="/leitura" element={<LeituraPage />} />
               <Route path="/treino" element={<TreinoPage />} />

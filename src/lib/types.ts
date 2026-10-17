@@ -9,6 +9,7 @@ export interface AppSettings {
   theme: 'claro' | 'escuro' | 'sistema'
   activeModules: Record<ModuleKey, boolean>
   hasSeenOnboarding: boolean
+  firstTimeWelcomeDismissed?: boolean
   userName: string
 }
 
@@ -238,14 +239,16 @@ export interface StudyGoalHistory {
   id: string
   courseId: string
   effectiveDate: string // YYYY-MM-DD
-  weeklyMinutes: number
+  weeklyMinutes?: number
+  dailyMinutes?: number
   created: string
 }
 
 export interface StudyGoal {
   id: string
   courseId: string
-  weeklyMinutes: number
+  weeklyMinutes?: number
+  dailyMinutes?: number
   history: StudyGoalHistory[]
   created: string
   updated: string
@@ -254,10 +257,24 @@ export interface StudyGoal {
 export interface CourseGoalProgress {
   course: Course
   weeklyMinutesTarget?: number
+  dailyMinutesTarget?: number
   weekMinutes: number
   monthMinutes: number
   todayMinutes: number
   hasGoal: boolean
+  hasDailyGoal: boolean
+}
+
+// ========================
+// DAY SUMMARIES (RESUMO DIÁRIO IMUTÁVEL PARA SEQUÊNCIA)
+// ========================
+export interface DaySummary {
+  date: string // YYYY-MM-DD (chave primária)
+  goalsTotal: number
+  goalsDone: number
+  closed: boolean // true se goalsTotal > 0 && goalsDone === goalsTotal
+  createdAt: string
+  updatedAt: string
 }
 
 // ========================
@@ -380,5 +397,6 @@ export interface ExportDataPayload {
     achievements?: Achievement[]
     experiences?: Experience[]
     work_notes?: WorkNote[]
+    day_summaries?: DaySummary[]
   }
 }

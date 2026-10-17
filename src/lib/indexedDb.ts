@@ -27,6 +27,7 @@ const STORE_PROJECTS = 'projects'
 const STORE_ACHIEVEMENTS = 'achievements'
 const STORE_EXPERIENCES = 'experiences'
 const STORE_WORK_NOTES = 'work_notes'
+const STORE_DAY_SUMMARIES = 'day_summaries'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -115,6 +116,11 @@ function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_WORK_NOTES)) {
         const store = db.createObjectStore(STORE_WORK_NOTES, { keyPath: 'id' })
         store.createIndex('date', 'date', { unique: false })
+      }
+
+      // v4: DAY SUMMARIES
+      if (!db.objectStoreNames.contains(STORE_DAY_SUMMARIES)) {
+        db.createObjectStore(STORE_DAY_SUMMARIES, { keyPath: 'date' })
       }
     }
 
@@ -400,6 +406,7 @@ export const idb = {
   STORE_ACHIEVEMENTS,
   STORE_EXPERIENCES,
   STORE_WORK_NOTES,
+  STORE_DAY_SUMMARIES,
   getAll: getAllFromStore,
   get: getFromStore,
   put: putInStore,

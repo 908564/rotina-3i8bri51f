@@ -12,6 +12,7 @@ export const defaultSettings: AppSettings = {
     trabalho: true,
   },
   hasSeenOnboarding: false,
+  firstTimeWelcomeDismissed: false,
   userName: '',
 }
 
