@@ -286,6 +286,7 @@ export interface ProjectTask {
   id: string
   title: string
   completed: boolean
+  completedAt?: string // ISO timestamp preenchido ao marcar, limpo ao desmarcar
 }
 
 export interface ProjectNote {

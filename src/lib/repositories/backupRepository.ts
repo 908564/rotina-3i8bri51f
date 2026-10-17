@@ -432,6 +432,10 @@ function sanitizeProject(item: any): Project | null {
           id: typeof t.id === 'string' ? t.id : crypto.randomUUID(),
           title: t.title,
           completed: Boolean(t.completed),
+          completedAt:
+            typeof t.completedAt === 'string' && isValidIsoDate(t.completedAt)
+              ? t.completedAt
+              : undefined,
         }))
     : []
 

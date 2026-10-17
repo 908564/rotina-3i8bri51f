@@ -87,14 +87,21 @@ export const trabalhoRepository = {
     const project = await this.getProjectById(projectId)
     if (!project) return undefined
 
-    const updatedTasks = project.tasks.map((t) =>
-      t.id === taskId ? { ...t, completed: !t.completed } : t,
-    )
+    const nowIso = new Date().toISOString()
+    const updatedTasks = project.tasks.map((t) => {
+      if (t.id !== taskId) return t
+      const nextCompleted = !t.completed
+      return {
+        ...t,
+        completed: nextCompleted,
+        completedAt: nextCompleted ? nowIso : undefined,
+      }
+    })
 
     const updatedProject: Project = {
       ...project,
       tasks: updatedTasks,
-      updated: new Date().toISOString(),
+      updated: nowIso,
     }
     await idb.put(idb.STORE_PROJECTS, updatedProject)
     return updatedProject
