@@ -45,6 +45,14 @@ export const taskRepository = {
     return all.filter((t) => !t.deletedAt)
   },
 
+  /**
+   * Obtém tarefas ativas filtradas por módulo
+   */
+  async getTasksByModule(module: TaskModule): Promise<Task[]> {
+    const all = await this.getTasks()
+    return all.filter((t) => t.module === module)
+  },
+
   async getTaskById(id: string): Promise<Task | undefined> {
     const task = await idb.get<Task>(idb.STORE_TASKS, id)
     if (!task || task.deletedAt) return undefined

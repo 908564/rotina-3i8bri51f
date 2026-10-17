@@ -138,7 +138,7 @@ export function TaskModal() {
           estudosRepository.getCourses(),
           trabalhoRepository.getProjects(),
           treinoRepository.getWeeklyPlans(),
-          treinoRepository.getAllLogs?.() || [],
+          treinoRepository.getLogs(),
         ])
         // Livros 'lendo' primeiro
         const sortedBooks = [...b].sort((x, y) => {
@@ -199,7 +199,7 @@ export function TaskModal() {
 
         // Popula moduleData existente
         if (existing.moduleData && existing.moduleData.module === existing.module) {
-          const md = existing.moduleData.data || {}
+          const md = (existing.moduleData.data || {}) as Record<string, any>
           if (existing.module === 'escrita') {
             setEscritaData({
               tipo: md.tipo || 'diario',
@@ -214,11 +214,11 @@ export function TaskModal() {
               atePagina: md.atePagina,
             })
           } else if (existing.module === 'treino') {
-            setTreinoData(md)
+            setTreinoData(md as TaskTreinoData)
           } else if (existing.module === 'estudos') {
-            setEstudosData(md)
+            setEstudosData(md as TaskEstudosData)
           } else if (existing.module === 'trabalho') {
-            setTrabalhoData(md)
+            setTrabalhoData(md as TaskTrabalhoData)
           }
         } else {
           // Defaults limpos
@@ -249,12 +249,12 @@ export function TaskModal() {
 
     // Inicializa moduleData do contexto (se fornecido) ou limpo
     if (ctx?.moduleData && ctx.moduleData.module === targetModule) {
-      const md = ctx.moduleData.data || {}
-      if (targetModule === 'escrita') setEscritaData(md)
-      else if (targetModule === 'leitura') setLeituraData(md)
-      else if (targetModule === 'treino') setTreinoData(md)
-      else if (targetModule === 'estudos') setEstudosData(md)
-      else if (targetModule === 'trabalho') setTrabalhoData(md)
+      const md = (ctx.moduleData.data || {}) as any
+      if (targetModule === 'escrita') setEscritaData(md as TaskEscritaData)
+      else if (targetModule === 'leitura') setLeituraData(md as TaskLeituraData)
+      else if (targetModule === 'treino') setTreinoData(md as TaskTreinoData)
+      else if (targetModule === 'estudos') setEstudosData(md as TaskEstudosData)
+      else if (targetModule === 'trabalho') setTrabalhoData(md as TaskTrabalhoData)
     } else {
       setEscritaData({ tipo: 'diario' })
       setLeituraData(ctx?.link?.type === 'book' ? { bookId: ctx.link.id } : {})
@@ -370,14 +370,14 @@ export function TaskModal() {
 
     setIsSubmitting(true)
     try {
-      const moduleDataCleaned = validateAndCleanModuleData(
-        module,
-        escritaData,
-        leituraData,
-        treinoData,
-        estudosData,
-        trabalhoData,
-      )
+      let rawData: any = {}
+      if (module === 'escrita') rawData = escritaData
+      else if (module === 'leitura') rawData = leituraData
+      else if (module === 'treino') rawData = treinoData
+      else if (module === 'estudos') rawData = estudosData
+      else if (module === 'trabalho') rawData = trabalhoData
+
+      const moduleDataCleaned = validateAndCleanModuleData(module, rawData)
 
       await taskRepository.saveTask({
         id: editingTask?.id,
@@ -933,12 +933,15 @@ export function TaskModal() {
 
       {/* Modal rápido de criação de livro a partir do módulo leitura */}
       <BookFormModal
-        isOpen={quickBookModalOpen}
+        open={quickBookModalOpen}
         onClose={() => setQuickBookModalOpen(false)}
-        onSuccess={(newBook) => {
+        onSave={async (bookData) => {
+          const saved = await leituraRepository.saveLivro(bookData)
+          if (saved) {
+            setBooks((prev) => [saved, ...prev])
+            setLeituraData((prev) => ({ ...prev, bookId: saved.id }))
+          }
           setQuickBookModalOpen(false)
-          setBooks((prev) => [newBook, ...prev])
-          setLeituraData((prev) => ({ ...prev, bookId: newBook.id }))
         }}
       />
 

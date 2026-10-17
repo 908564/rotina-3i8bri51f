@@ -13,6 +13,7 @@ import {
   FileText,
   ExternalLink,
   Target,
+  CheckSquare,
 } from 'lucide-react'
 import { Course, StudyPage, StudyCertificate, StudySession, CourseGoalProgress } from '@/lib/types'
 import { estudosRepository } from '@/lib/repositories/estudosRepository'

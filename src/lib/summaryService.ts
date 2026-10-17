@@ -3,6 +3,7 @@ import {
   DaySummary,
   TreinoLog,
   TreinoPlanoSemanal,
+  ActivityLog,
   Livro,
   LeituraHistorico,
   EscritaNote,
@@ -257,6 +258,7 @@ export async function getWeekSummary(
     allSummaries,
     allLogs,
     allPlans,
+    allActivityLogs,
     allLeituraHist,
     allNotes,
     allStudySessions,
@@ -267,6 +269,7 @@ export async function getWeekSummary(
     idb.getAll<DaySummary>(idb.STORE_DAY_SUMMARIES),
     isTreinoActive ? idb.getAll<TreinoLog>(idb.STORE_TREINO_LOG) : Promise.resolve([]),
     isTreinoActive ? idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO) : Promise.resolve([]),
+    isTreinoActive ? idb.getAll<ActivityLog>(idb.STORE_ACTIVITY_LOGS) : Promise.resolve([]),
     isLeituraActive
       ? idb.getAll<LeituraHistorico>(idb.STORE_LEITURA_HISTORICO)
       : Promise.resolve([]),
@@ -419,6 +422,11 @@ export async function getWeekSummary(
   const prevComparableTreinoDone = prevComparableDays.filter((d) => isDayWorkoutCompleted(d)).length
 
   const treinoTotalSeriesWeek = range.days.reduce((acc, d) => acc + getCompletedSetsForDay(d), 0)
+
+  // Km total de cardio realizado na semana selecionada
+  const treinoTotalCardioKmWeek = (allActivityLogs || [])
+    .filter((l) => l.type === 'cardio' && l.date >= range.monday && l.date <= range.sunday)
+    .reduce((sum, l) => sum + (Number(l.km) || 0), 0)
 
   const treinoDailyBars = range.days.map((d, idx) => {
     const val = getCompletedSetsForDay(d)
@@ -690,20 +698,36 @@ export async function getWeekSummary(
 
   // Treino
   const treinoActive = isTreinoActive
-  const treinoHasRecords = currentWeekTreinoDone > 0 || treinoTotalSeriesWeek > 0
+  const treinoHasRecords =
+    currentWeekTreinoDone > 0 || treinoTotalSeriesWeek > 0 || treinoTotalCardioKmWeek > 0
   const maxTreinoDaily = Math.max(...treinoDailyBars.map((b) => b.value), 0)
+
+  let treinoLegend = 'Sem registros esta semana'
+  if (treinoHasRecords) {
+    const seriesText = `${treinoTotalSeriesWeek} ${pluralWord(treinoTotalSeriesWeek, 'serie')}`
+    if (treinoTotalCardioKmWeek > 0) {
+      const kmFormatted = treinoTotalCardioKmWeek.toFixed(1).replace('.', ',')
+      treinoLegend = `${seriesText} · ${kmFormatted} km`
+    } else {
+      treinoLegend = `${pluralize(treinoTotalSeriesWeek, 'serie')} concluídas`
+    }
+  }
+
   const treinoMetrics: ModuleWeekMetrics = {
     active: treinoActive,
     displayValue: treinoHasRecords ? `${currentWeekTreinoDone}` : '—',
     unit: pluralWord(currentWeekTreinoDone, 'treino'),
-    legend: treinoHasRecords
-      ? `${pluralize(treinoTotalSeriesWeek, 'serie')} concluídas`
-      : 'Sem registros esta semana',
+    legend: treinoLegend,
     dailyBars: treinoDailyBars,
     maxDailyValue: maxTreinoDaily,
-    variation: treinoHasRecords
-      ? buildVariation(currentComparableTreinoDone, prevComparableTreinoDone, prevTreinoHasRecords)
-      : undefined,
+    variation:
+      currentWeekTreinoDone > 0 || treinoTotalSeriesWeek > 0
+        ? buildVariation(
+            currentComparableTreinoDone,
+            prevComparableTreinoDone,
+            prevTreinoHasRecords,
+          )
+        : undefined,
   }
 
   // Leitura

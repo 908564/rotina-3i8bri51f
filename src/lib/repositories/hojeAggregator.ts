@@ -572,7 +572,7 @@ export async function getFastTodayData(
       } else {
         // Apenas uma sessão de musculação: mantém "séries"
         displayVal = `${completedSetsCount}/${totalPlannedSets}`
-        legend = 'séries de hoje'
+        legend = hasMuscPlan ? `${totalPlannedSets} séries` : 'séries de hoje'
         pct =
           totalPlannedSets > 0
             ? Math.min(100, Math.round((completedSetsCount / totalPlannedSets) * 100))
@@ -580,7 +580,7 @@ export async function getFastTodayData(
       }
     }
 
-    if (todayCardioKm > 0) {
+    if (todayCardioKm > 0 && !isRestDay) {
       const kmFormatted = todayCardioKm.toFixed(1).replace('.', ',')
       legend = `${legend} · ${kmFormatted} km`
     }
