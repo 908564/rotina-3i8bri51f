@@ -483,6 +483,18 @@ class SyncEngine {
         return idb.STORE_WORK_NOTES
       case 'daySummary':
         return idb.STORE_DAY_SUMMARIES
+      case 'task':
+        return idb.STORE_TASKS
+      case 'idea':
+        return idb.STORE_IDEAS
+      case 'activityPlan':
+        return idb.STORE_ACTIVITY_PLANS
+      case 'activityLog':
+        return idb.STORE_ACTIVITY_LOGS
+      case 'moduleDay':
+        return idb.STORE_MODULE_DAYS
+      case 'medal':
+        return idb.STORE_MEDALS
       case 'settings':
         return null // Especial
       default:

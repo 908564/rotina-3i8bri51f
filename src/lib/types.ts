@@ -19,6 +19,79 @@ export interface TaskSubtask {
   done: boolean
 }
 
+// Sub-dados específicos por módulo para tarefas
+export interface TaskEscritaData {
+  tipo: 'diario' | 'ideia'
+  tema?: string // até 80 caracteres
+  metaMinutos?: number // opcional
+}
+
+export interface TaskLeituraData {
+  bookId?: string
+  metaPaginas?: number
+  metaMinutos?: number
+  atePagina?: number
+}
+
+export type TreinoTipo = 'musculacao' | 'cardio' | 'outros'
+
+export interface TaskTreinoMusculacaoData {
+  subtipo: 'academia' | 'calistenia'
+  diaOuGrupo: string // dia do plano ou grupo muscular
+}
+
+export interface TaskTreinoCardioData {
+  modalidade: 'corrida' | 'caminhada' | 'bicicleta'
+  metaDistancia?: number // km, decimal
+  metaTempo?: number // min
+  intensidade: 'leve' | 'moderada' | 'intensa'
+}
+
+export interface TaskTreinoOutrosData {
+  esporte: string
+  duracao?: number // min opcional
+}
+
+export interface TaskTreinoData {
+  tipo: TreinoTipo
+  musculacao?: TaskTreinoMusculacaoData
+  cardio?: TaskTreinoCardioData
+  outros?: TaskTreinoOutrosData
+}
+
+export type EstudosVinculoTipo = 'faculdade' | 'curso' | 'certificacao' | 'outros'
+export type EstudosAtividadeTipo =
+  | 'assistir_aula'
+  | 'ler'
+  | 'exercicios'
+  | 'revisar'
+  | 'entrega_prova'
+
+export interface TaskEstudosData {
+  vinculoTipo?: EstudosVinculoTipo
+  courseId?: string // quando vinculado a curso existente
+  estudoAutonomoNome?: string // quando "outros" (estudo autônomo)
+  tipoAtividade: EstudosAtividadeTipo
+  metaMinutos?: number // opcional
+  tema?: string // até 80 caracteres
+}
+
+export type TrabalhoTipo = 'tarefa' | 'reuniao' | 'entrega'
+
+export interface TaskTrabalhoData {
+  projectId?: string
+  tipo: TrabalhoTipo
+  sugerirConquista: boolean // interruptor "Sugerir registrar conquista ao concluir"
+}
+
+export type TaskModuleData =
+  | { module: 'escrita'; data: TaskEscritaData }
+  | { module: 'leitura'; data: TaskLeituraData }
+  | { module: 'treino'; data: TaskTreinoData }
+  | { module: 'estudos'; data: TaskEstudosData }
+  | { module: 'trabalho'; data: TaskTrabalhoData }
+  | { module: 'geral'; data?: Record<string, never> }
+
 export interface Task {
   id: string
   title: string // 1-140 caracteres
@@ -31,6 +104,7 @@ export interface Task {
   status: TaskStatus
   completedAt: string | null // timestamp ISO
   subtasks: TaskSubtask[] // máx 20
+  moduleData?: TaskModuleData | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -309,6 +383,85 @@ export interface DaySummary {
 }
 
 // ========================
+// NOVOS ARMAZENAMENTOS LOCAIS (PARTE 0)
+// ========================
+
+export type ModuleDayKey = 'leitura' | 'treino' | 'escrita' | 'estudos'
+export type ModuleDaySource = 'auto' | 'manual' | 'timer'
+
+export interface ModuleDay {
+  id: string // UUID
+  date: string // AAAA-MM-DD
+  module: ModuleDayKey // leitura | treino | escrita | estudos
+  goalDefined: boolean
+  done: boolean
+  source: ModuleDaySource // auto | manual | timer
+  value?: number // resumo numérico do dia (páginas, minutos, séries etc.)
+  doneAt?: string | null // ISO timestamp
+  createdAt: string // ISO timestamp
+  updatedAt: string // ISO timestamp
+}
+
+export interface Idea {
+  id: string // UUID
+  title: string
+  body?: string
+  tags?: string[]
+  status?: 'aberta' | 'em_andamento' | 'arquivada'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ActivityPlan {
+  id: string // UUID
+  module: ModuleKey
+  title: string
+  targetValue?: number
+  unit?: string
+  frequency?: 'diaria' | 'semanal'
+  metadata?: Record<string, any>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ActivityLog {
+  id: string // UUID
+  module: ModuleKey
+  planId?: string
+  date: string // AAAA-MM-DD
+  value?: number
+  durationMinutes?: number
+  notes?: string
+  source?: 'auto' | 'manual' | 'timer'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Medal {
+  id: string // UUID
+  code: string // código único da medalha, ex: 'streak_7', 'first_book'
+  title: string
+  description: string
+  module?: ModuleKey | 'geral'
+  earnedAt: string // ISO timestamp
+  createdAt: string
+  updatedAt: string
+}
+
+// Timer state: SOMENTE LOCAL, sem sincronização nem backup
+export interface TimerState {
+  id: string // 'active' ou UUID
+  module: ModuleKey
+  status: 'running' | 'paused' | 'stopped'
+  startedAt?: string
+  elapsedSeconds: number
+  targetSeconds?: number
+  metadata?: Record<string, any>
+  createdAt: string
+  updatedAt: string
+}
+
+// ========================
 // 5) TRABALHO
 // ========================
 export type ProjectStatus = 'planejado' | 'em_andamento' | 'concluido' | 'pausado'
@@ -434,6 +587,11 @@ export type SyncEntity =
   | 'daySummary'
   | 'settings'
   | 'task'
+  | 'idea'
+  | 'activityPlan'
+  | 'activityLog'
+  | 'moduleDay'
+  | 'medal'
 
 export type SyncOperation = 'upsert' | 'delete'
 
@@ -479,5 +637,11 @@ export interface ExportDataPayload {
     experiences?: Experience[]
     work_notes?: WorkNote[]
     day_summaries?: DaySummary[]
+    tasks?: Task[]
+    ideas?: Idea[]
+    activity_plans?: ActivityPlan[]
+    activity_logs?: ActivityLog[]
+    module_days?: ModuleDay[]
+    medals?: Medal[]
   }
 }

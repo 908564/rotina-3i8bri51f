@@ -29,6 +29,12 @@ const STORE_EXPERIENCES = 'experiences'
 const STORE_WORK_NOTES = 'work_notes'
 const STORE_DAY_SUMMARIES = 'day_summaries'
 const STORE_TASKS = 'tasks'
+const STORE_IDEAS = 'ideas'
+const STORE_ACTIVITY_PLANS = 'activity_plans'
+const STORE_ACTIVITY_LOGS = 'activity_logs'
+const STORE_MODULE_DAYS = 'module_days'
+const STORE_MEDALS = 'medals'
+const STORE_TIMER_STATE = 'timer_state'
 const STORE_SYNC_OUTBOX = 'sync_outbox'
 const STORE_SYNC_META = 'sync_meta'
 
@@ -148,6 +154,43 @@ function getDB(): Promise<IDBDatabase> {
         taskStore.createIndex('updatedAt', 'updatedAt', { unique: false })
       } else {
         taskStore = (event.target as IDBOpenDBRequest).transaction!.objectStore(STORE_TASKS)
+      }
+
+      // v7: NOVOS STORES (ideas, activity_plans, activity_logs, module_days, medals, timer_state)
+      if (!db.objectStoreNames.contains(STORE_IDEAS)) {
+        const store = db.createObjectStore(STORE_IDEAS, { keyPath: 'id' })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_ACTIVITY_PLANS)) {
+        const store = db.createObjectStore(STORE_ACTIVITY_PLANS, { keyPath: 'id' })
+        store.createIndex('module', 'module', { unique: false })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_ACTIVITY_LOGS)) {
+        const store = db.createObjectStore(STORE_ACTIVITY_LOGS, { keyPath: 'id' })
+        store.createIndex('module', 'module', { unique: false })
+        store.createIndex('date', 'date', { unique: false })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_MODULE_DAYS)) {
+        const store = db.createObjectStore(STORE_MODULE_DAYS, { keyPath: 'id' })
+        store.createIndex('date', 'date', { unique: false })
+        store.createIndex('module', 'module', { unique: false })
+        store.createIndex('date_module', ['date', 'module'], { unique: true })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_MEDALS)) {
+        const store = db.createObjectStore(STORE_MEDALS, { keyPath: 'id' })
+        store.createIndex('code', 'code', { unique: true })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_TIMER_STATE)) {
+        db.createObjectStore(STORE_TIMER_STATE, { keyPath: 'id' })
       }
 
       // Migração automática de ProjectTask -> Task no upgrade de versão
@@ -470,6 +513,12 @@ export const idb = {
   STORE_WORK_NOTES,
   STORE_DAY_SUMMARIES,
   STORE_TASKS,
+  STORE_IDEAS,
+  STORE_ACTIVITY_PLANS,
+  STORE_ACTIVITY_LOGS,
+  STORE_MODULE_DAYS,
+  STORE_MEDALS,
+  STORE_TIMER_STATE,
   STORE_SYNC_OUTBOX,
   STORE_SYNC_META,
   getAll: getAllFromStore,

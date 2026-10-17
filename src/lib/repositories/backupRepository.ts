@@ -417,6 +417,280 @@ function sanitizeDaySummary(item: any): DaySummary | null {
   }
 }
 
+function sanitizeTask(item: any): Task | null {
+  if (!item || typeof item !== 'object') return null
+  if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt)) {
+    return null
+  }
+  if (typeof item.title !== 'string' || !item.title.trim()) return null
+
+  const validModules = ['geral', 'leitura', 'treino', 'escrita', 'estudos', 'trabalho']
+  const module = validModules.includes(item.module) ? item.module : 'geral'
+
+  const validPriorities = ['alta', 'media', 'baixa']
+  const priority = validPriorities.includes(item.priority) ? item.priority : 'media'
+
+  const validStatuses = ['pendente', 'concluida', 'cancelada']
+  const status = validStatuses.includes(item.status) ? item.status : 'pendente'
+
+  let link: TaskLink | null = null
+  if (item.link && typeof item.link === 'object') {
+    if (
+      ['livro', 'treino', 'curso', 'projeto'].includes(item.link.type) &&
+      typeof item.link.id === 'string' &&
+      typeof item.link.title === 'string'
+    ) {
+      link = {
+        type: item.link.type,
+        id: item.link.id,
+        title: item.link.title,
+      }
+    }
+  }
+
+  const subtasks: TaskSubtask[] = Array.isArray(item.subtasks)
+    ? item.subtasks
+        .filter((s: any) => s && typeof s === 'object' && typeof s.title === 'string')
+        .slice(0, 20)
+        .map((s: any) => ({
+          id: typeof s.id === 'string' ? s.id : crypto.randomUUID(),
+          title: s.title.slice(0, 100),
+          completed: Boolean(s.completed),
+        }))
+    : []
+
+  // moduleData sanitization
+  let moduleData: any = null
+  if (item.moduleData && typeof item.moduleData === 'object' && item.moduleData.module) {
+    const md = item.moduleData
+    if (md.module === 'escrita' && md.data) {
+      const tipo = ['diario', 'ideia'].includes(md.data.tipo) ? md.data.tipo : 'diario'
+      moduleData = {
+        module: 'escrita',
+        data: {
+          tipo,
+          tema: typeof md.data.tema === 'string' ? md.data.tema.slice(0, 80) : undefined,
+          metaMinutos:
+            typeof md.data.metaMinutos === 'number' ? Math.max(0, md.data.metaMinutos) : undefined,
+        },
+      }
+    } else if (md.module === 'leitura' && md.data) {
+      moduleData = {
+        module: 'leitura',
+        data: {
+          bookId: typeof md.data.bookId === 'string' ? md.data.bookId : undefined,
+          metaPaginas:
+            typeof md.data.metaPaginas === 'number' ? Math.max(0, md.data.metaPaginas) : undefined,
+          metaMinutos:
+            typeof md.data.metaMinutos === 'number' ? Math.max(0, md.data.metaMinutos) : undefined,
+          atePagina:
+            typeof md.data.atePagina === 'number' ? Math.max(0, md.data.atePagina) : undefined,
+        },
+      }
+    } else if (md.module === 'treino' && md.data) {
+      const tipo = ['musculacao', 'cardio', 'outros'].includes(md.data.tipo)
+        ? md.data.tipo
+        : 'musculacao'
+      const treinoData: any = { tipo }
+      if (tipo === 'musculacao' && md.data.musculacao) {
+        treinoData.musculacao = {
+          subtipo: ['academia', 'calistenia'].includes(md.data.musculacao.subtipo)
+            ? md.data.musculacao.subtipo
+            : 'academia',
+          diaOuGrupo:
+            typeof md.data.musculacao.diaOuGrupo === 'string' ? md.data.musculacao.diaOuGrupo : '',
+        }
+      } else if (tipo === 'cardio' && md.data.cardio) {
+        treinoData.cardio = {
+          modalidade: ['corrida', 'caminhada', 'bicicleta'].includes(md.data.cardio.modalidade)
+            ? md.data.cardio.modalidade
+            : 'corrida',
+          metaDistancia:
+            typeof md.data.cardio.metaDistancia === 'number'
+              ? Math.max(0, md.data.cardio.metaDistancia)
+              : undefined,
+          metaTempo:
+            typeof md.data.cardio.metaTempo === 'number'
+              ? Math.max(0, md.data.cardio.metaTempo)
+              : undefined,
+          intensidade: ['leve', 'moderada', 'intensa'].includes(md.data.cardio.intensidade)
+            ? md.data.cardio.intensidade
+            : 'moderada',
+        }
+      } else if (tipo === 'outros' && md.data.outros) {
+        treinoData.outros = {
+          esporte: typeof md.data.outros.esporte === 'string' ? md.data.outros.esporte : '',
+          duracao:
+            typeof md.data.outros.duracao === 'number'
+              ? Math.max(0, md.data.outros.duracao)
+              : undefined,
+        }
+      }
+      moduleData = { module: 'treino', data: treinoData }
+    } else if (md.module === 'estudos' && md.data) {
+      const validAtividades = ['assistir_aula', 'ler', 'exercicios', 'revisar', 'entrega_prova']
+      moduleData = {
+        module: 'estudos',
+        data: {
+          vinculoTipo: ['faculdade', 'curso', 'certificacao', 'outros'].includes(
+            md.data.vinculoTipo,
+          )
+            ? md.data.vinculoTipo
+            : undefined,
+          courseId: typeof md.data.courseId === 'string' ? md.data.courseId : undefined,
+          estudoAutonomoNome:
+            typeof md.data.estudoAutonomoNome === 'string' ? md.data.estudoAutonomoNome : undefined,
+          tipoAtividade: validAtividades.includes(md.data.tipoAtividade)
+            ? md.data.tipoAtividade
+            : 'assistir_aula',
+          metaMinutos:
+            typeof md.data.metaMinutos === 'number' ? Math.max(0, md.data.metaMinutos) : undefined,
+          tema: typeof md.data.tema === 'string' ? md.data.tema.slice(0, 80) : undefined,
+        },
+      }
+    } else if (md.module === 'trabalho' && md.data) {
+      moduleData = {
+        module: 'trabalho',
+        data: {
+          projectId: typeof md.data.projectId === 'string' ? md.data.projectId : undefined,
+          tipo: ['tarefa', 'reuniao', 'entrega'].includes(md.data.tipo) ? md.data.tipo : 'tarefa',
+          sugerirConquista: Boolean(md.data.sugerirConquista),
+        },
+      }
+    } else if (md.module === 'geral') {
+      moduleData = { module: 'geral', data: {} }
+    }
+  }
+
+  return {
+    id: item.id,
+    title: item.title.slice(0, 140),
+    module,
+    link,
+    dueDate: typeof item.dueDate === 'string' ? item.dueDate : null,
+    dueTime: typeof item.dueTime === 'string' ? item.dueTime : null,
+    reminder: Boolean(item.reminder),
+    priority,
+    status,
+    completedAt:
+      typeof item.completedAt === 'string' && isValidIsoDate(item.completedAt)
+        ? item.completedAt
+        : null,
+    subtasks,
+    moduleData,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    deletedAt:
+      typeof item.deletedAt === 'string' && isValidIsoDate(item.deletedAt) ? item.deletedAt : null,
+  }
+}
+
+function sanitizeIdea(item: any): Idea | null {
+  if (!item || typeof item !== 'object') return null
+  if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt))
+    return null
+  if (typeof item.title !== 'string' || !item.title.trim()) return null
+
+  return {
+    id: item.id,
+    title: item.title,
+    body: typeof item.body === 'string' ? item.body : '',
+    tags: Array.isArray(item.tags) ? item.tags.filter((t: any) => typeof t === 'string') : [],
+    status: ['aberta', 'em_andamento', 'arquivada'].includes(item.status) ? item.status : 'aberta',
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
+
+function sanitizeActivityPlan(item: any): ActivityPlan | null {
+  if (!item || typeof item !== 'object') return null
+  if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt))
+    return null
+  if (typeof item.title !== 'string' || !item.title.trim()) return null
+  const validModules = ['escrita', 'leitura', 'treino', 'estudos', 'trabalho']
+  const module = validModules.includes(item.module) ? item.module : 'leitura'
+
+  return {
+    id: item.id,
+    module,
+    title: item.title,
+    targetValue: typeof item.targetValue === 'number' ? item.targetValue : undefined,
+    unit: typeof item.unit === 'string' ? item.unit : undefined,
+    frequency: ['diaria', 'semanal'].includes(item.frequency) ? item.frequency : undefined,
+    metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : undefined,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
+
+function sanitizeActivityLog(item: any): ActivityLog | null {
+  if (!item || typeof item !== 'object') return null
+  if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt))
+    return null
+  if (typeof item.date !== 'string' || !item.date.match(/^\d{4}-\d{2}-\d{2}$/)) return null
+  const validModules = ['escrita', 'leitura', 'treino', 'estudos', 'trabalho']
+  const module = validModules.includes(item.module) ? item.module : 'leitura'
+
+  return {
+    id: item.id,
+    module,
+    planId: isValidUuid(item.planId) ? item.planId : undefined,
+    date: item.date,
+    value: typeof item.value === 'number' ? item.value : undefined,
+    durationMinutes: typeof item.durationMinutes === 'number' ? item.durationMinutes : undefined,
+    notes: typeof item.notes === 'string' ? item.notes : undefined,
+    source: ['auto', 'manual', 'timer'].includes(item.source) ? item.source : 'auto',
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
+
+function sanitizeModuleDay(item: any): ModuleDay | null {
+  if (!item || typeof item !== 'object') return null
+  if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt))
+    return null
+  if (typeof item.date !== 'string' || !item.date.match(/^\d{4}-\d{2}-\d{2}$/)) return null
+
+  const validModules = ['leitura', 'treino', 'escrita', 'estudos']
+  if (!validModules.includes(item.module)) return null
+
+  const validSources = ['auto', 'manual', 'timer']
+  const source = validSources.includes(item.source) ? item.source : 'auto'
+
+  return {
+    id: item.id,
+    date: item.date,
+    module: item.module,
+    goalDefined: Boolean(item.goalDefined),
+    done: Boolean(item.done),
+    source,
+    value: typeof item.value === 'number' ? item.value : undefined,
+    doneAt: typeof item.doneAt === 'string' && isValidIsoDate(item.doneAt) ? item.doneAt : null,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
+
+function sanitizeMedal(item: any): Medal | null {
+  if (!item || typeof item !== 'object') return null
+  if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt))
+    return null
+  if (typeof item.code !== 'string' || !item.code.trim()) return null
+  if (typeof item.title !== 'string' || !item.title.trim()) return null
+  if (!isValidIsoDate(item.earnedAt)) return null
+
+  return {
+    id: item.id,
+    code: item.code,
+    title: item.title,
+    description: typeof item.description === 'string' ? item.description : '',
+    module: typeof item.module === 'string' ? item.module : undefined,
+    earnedAt: item.earnedAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
+
 function sanitizeProject(item: any): Project | null {
   if (!hasBaseAuditFields(item)) return null
   if (typeof item.name !== 'string') return null
@@ -579,6 +853,12 @@ export const backupRepository = {
       { key: 'experiences', store: idb.STORE_EXPERIENCES },
       { key: 'work_notes', store: idb.STORE_WORK_NOTES },
       { key: 'day_summaries', store: idb.STORE_DAY_SUMMARIES },
+      { key: 'tasks', store: idb.STORE_TASKS },
+      { key: 'ideas', store: idb.STORE_IDEAS },
+      { key: 'activity_plans', store: idb.STORE_ACTIVITY_PLANS },
+      { key: 'activity_logs', store: idb.STORE_ACTIVITY_LOGS },
+      { key: 'module_days', store: idb.STORE_MODULE_DAYS },
+      { key: 'medals', store: idb.STORE_MEDALS },
     ]
 
     for (const { key, store } of stores) {
@@ -606,6 +886,12 @@ export const backupRepository = {
     const experiences = await idb.getAll<Experience>(idb.STORE_EXPERIENCES)
     const work_notes = await idb.getAll<WorkNote>(idb.STORE_WORK_NOTES)
     const day_summaries = await idb.getAll<DaySummary>(idb.STORE_DAY_SUMMARIES)
+    const tasks = await idb.getAll<Task>(idb.STORE_TASKS)
+    const ideas = await idb.getAll<Idea>(idb.STORE_IDEAS)
+    const activity_plans = await idb.getAll<ActivityPlan>(idb.STORE_ACTIVITY_PLANS)
+    const activity_logs = await idb.getAll<ActivityLog>(idb.STORE_ACTIVITY_LOGS)
+    const module_days = await idb.getAll<ModuleDay>(idb.STORE_MODULE_DAYS)
+    const medals = await idb.getAll<Medal>(idb.STORE_MEDALS)
 
     if (options?.omitAttachments) {
       livros = livros.map((book) => {
@@ -638,6 +924,12 @@ export const backupRepository = {
         experiences,
         work_notes,
         day_summaries,
+        tasks,
+        ideas,
+        activity_plans,
+        activity_logs,
+        module_days,
+        medals,
       },
     }
   },
@@ -759,6 +1051,25 @@ export const backupRepository = {
       sanitizeDaySummary,
     )
 
+    const sanitizedTasks = processCollection(cols.tasks, 'tasks', sanitizeTask)
+    const sanitizedIdeas = processCollection(cols.ideas, 'ideas', sanitizeIdea)
+    const sanitizedActivityPlans = processCollection(
+      cols.activity_plans,
+      'activity_plans',
+      sanitizeActivityPlan,
+    )
+    const sanitizedActivityLogs = processCollection(
+      cols.activity_logs,
+      'activity_logs',
+      sanitizeActivityLog,
+    )
+    const sanitizedModuleDays = processCollection(
+      cols.module_days,
+      'module_days',
+      sanitizeModuleDay,
+    )
+    const sanitizedMedals = processCollection(cols.medals, 'medals', sanitizeMedal)
+
     const validPayload: ExportDataPayload = {
       schemaVersion: BACKUP_SCHEMA_VERSION,
       appName: 'Rotina',
@@ -781,6 +1092,12 @@ export const backupRepository = {
         experiences: sanitizedExperiences,
         work_notes: sanitizedWorkNotes,
         day_summaries: sanitizedDaySummaries,
+        tasks: sanitizedTasks,
+        ideas: sanitizedIdeas,
+        activity_plans: sanitizedActivityPlans,
+        activity_logs: sanitizedActivityLogs,
+        module_days: sanitizedModuleDays,
+        medals: sanitizedMedals,
       },
     }
 
@@ -826,6 +1143,12 @@ export const backupRepository = {
       idb.STORE_EXPERIENCES,
       idb.STORE_WORK_NOTES,
       idb.STORE_DAY_SUMMARIES,
+      idb.STORE_TASKS,
+      idb.STORE_IDEAS,
+      idb.STORE_ACTIVITY_PLANS,
+      idb.STORE_ACTIVITY_LOGS,
+      idb.STORE_MODULE_DAYS,
+      idb.STORE_MEDALS,
     ]
 
     let totalImported = 0
@@ -953,6 +1276,54 @@ export const backupRepository = {
           totalImported++
         }
       }
+
+      if (c.tasks) {
+        const storeTasks = tx.objectStore(idb.STORE_TASKS)
+        for (const item of c.tasks) {
+          storeTasks.put(item)
+          totalImported++
+        }
+      }
+
+      if (c.ideas) {
+        const storeIdeas = tx.objectStore(idb.STORE_IDEAS)
+        for (const item of c.ideas) {
+          storeIdeas.put(item)
+          totalImported++
+        }
+      }
+
+      if (c.activity_plans) {
+        const storeActivityPlans = tx.objectStore(idb.STORE_ACTIVITY_PLANS)
+        for (const item of c.activity_plans) {
+          storeActivityPlans.put(item)
+          totalImported++
+        }
+      }
+
+      if (c.activity_logs) {
+        const storeActivityLogs = tx.objectStore(idb.STORE_ACTIVITY_LOGS)
+        for (const item of c.activity_logs) {
+          storeActivityLogs.put(item)
+          totalImported++
+        }
+      }
+
+      if (c.module_days) {
+        const storeModuleDays = tx.objectStore(idb.STORE_MODULE_DAYS)
+        for (const item of c.module_days) {
+          storeModuleDays.put(item)
+          totalImported++
+        }
+      }
+
+      if (c.medals) {
+        const storeMedals = tx.objectStore(idb.STORE_MEDALS)
+        for (const item of c.medals) {
+          storeMedals.put(item)
+          totalImported++
+        }
+      }
     })
 
     // Salva configurações após sucesso da transação de banco
@@ -985,6 +1356,13 @@ export const backupRepository = {
       idb.STORE_EXPERIENCES,
       idb.STORE_WORK_NOTES,
       idb.STORE_DAY_SUMMARIES,
+      idb.STORE_TASKS,
+      idb.STORE_IDEAS,
+      idb.STORE_ACTIVITY_PLANS,
+      idb.STORE_ACTIVITY_LOGS,
+      idb.STORE_MODULE_DAYS,
+      idb.STORE_MEDALS,
+      idb.STORE_TIMER_STATE,
     ]
 
     await idb.runTransaction(allStores, 'readwrite', (tx) => {

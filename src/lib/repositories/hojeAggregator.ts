@@ -2,6 +2,7 @@ import { idb } from '../indexedDb'
 import { getTodayDateKey, getLocalDayOfWeek, parseLocalDate } from '../dateUtils'
 import { settingsRepository } from './settingsRepository'
 import { daySummaryRepository } from './daySummaryRepository'
+import { moduleDaysRepository } from './moduleDaysRepository'
 import { estudosRepository } from './estudosRepository'
 import { leituraRepository, getBookGoalForDate } from './leituraRepository'
 import {
@@ -289,13 +290,54 @@ export async function getFastTodayData(
   }
 
   // ========================
-  // ATUALIZAÇÃO DO DAY_SUMMARIES DE HOJE
+  // ATUALIZAÇÃO DO MODULE_DAYS E DERIVAÇÃO DE DAY_SUMMARIES DE HOJE (PARTE 0)
   // ========================
-  const todaySummary = await daySummaryRepository.updateTodaySummary(
-    goalsTotal,
-    goalsDone,
-    todayDateKey,
-  )
+  if (activeModules.treino) {
+    await moduleDaysRepository.recordModuleDay({
+      date: todayDateKey,
+      module: 'treino',
+      goalDefined: treinoHasGoal,
+      done: isTreinoCompleted,
+      source: 'auto',
+      value: completedSetsCount,
+    })
+  }
+
+  if (activeModules.leitura) {
+    await moduleDaysRepository.recordModuleDay({
+      date: todayDateKey,
+      module: 'leitura',
+      goalDefined: leituraHasGoal,
+      done: isLeituraCompleted,
+      source: 'auto',
+      value: todayPages || todayReadingMinutes,
+    })
+  }
+
+  if (activeModules.escrita) {
+    await moduleDaysRepository.recordModuleDay({
+      date: todayDateKey,
+      module: 'escrita',
+      goalDefined: escritaHasGoal,
+      done: isEscritaCompleted,
+      source: 'auto',
+      value: isEscritaCompleted ? 1 : 0,
+    })
+  }
+
+  if (activeModules.estudos) {
+    await moduleDaysRepository.recordModuleDay({
+      date: todayDateKey,
+      module: 'estudos',
+      goalDefined: estudosHasGoal,
+      done: isEstudosCompleted,
+      source: 'auto',
+      value: todayStudyMinutes,
+    })
+  }
+
+  // day_summaries agora é derivado de module_days
+  const todaySummary = await moduleDaysRepository.deriveDaySummaryForDate(todayDateKey)
   const streak = await daySummaryRepository.calculateStreak(todayDateKey, todaySummary)
 
   // ========================

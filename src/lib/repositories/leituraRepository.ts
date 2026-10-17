@@ -566,37 +566,50 @@ export const leituraRepository = {
       return { hasTarget: true, isMet: met }
     }
 
+    // Calcula ofensiva de leitura preferencialmente pelo moduleDaysRepository (PARTE 0)
     let streak = 0
-    let cursorDateStr = today
-
-    // Avalia o dia de hoje
-    const todayEval = evaluateDayGoal(today)
-    if (todayEval.hasTarget && todayEval.isMet) {
-      streak++
-      cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
-    } else {
-      // Se hoje ainda não atingiu ou não tem meta, começamos a checar a partir de ontem
-      cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
+    try {
+      const { moduleDaysRepository } = await import('./moduleDaysRepository')
+      const modStreak = await moduleDaysRepository.calculateModuleStreak('leitura', today)
+      if (modStreak > 0) {
+        streak = modStreak
+      }
+    } catch {
+      // Fallback
     }
 
-    // Varre para trás até 365 dias
-    let daysChecked = 0
-    while (daysChecked < 365) {
-      daysChecked++
-      const dayEval = evaluateDayGoal(cursorDateStr)
+    if (streak === 0) {
+      let cursorDateStr = today
 
-      if (!dayEval.hasTarget) {
-        // "Dias sem nenhum livro com meta não quebram nem aumentam a sequência."
-        cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
-        continue
-      }
-
-      if (dayEval.isMet) {
+      // Avalia o dia de hoje
+      const todayEval = evaluateDayGoal(today)
+      if (todayEval.hasTarget && todayEval.isMet) {
         streak++
         cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
       } else {
-        // Quebrou a sequência
-        break
+        // Se hoje ainda não atingiu ou não tem meta, começamos a checar a partir de ontem
+        cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
+      }
+
+      // Varre para trás até 365 dias
+      let daysChecked = 0
+      while (daysChecked < 365) {
+        daysChecked++
+        const dayEval = evaluateDayGoal(cursorDateStr)
+
+        if (!dayEval.hasTarget) {
+          // "Dias sem nenhum livro com meta não quebram nem aumentam a sequência."
+          cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
+          continue
+        }
+
+        if (dayEval.isMet) {
+          streak++
+          cursorDateStr = subDaysFromDateKey(cursorDateStr, 1)
+        } else {
+          // Quebrou a sequência
+          break
+        }
       }
     }
 
