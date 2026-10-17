@@ -21,6 +21,14 @@ import {
   AppSettings,
   ModuleKey,
   DaySummary,
+  Task,
+  TaskLink,
+  TaskSubtask,
+  Idea,
+  ActivityPlan,
+  ActivityLog,
+  ModuleDay,
+  Medal,
 } from '../types'
 
 /** Limite máximo padrão para arquivo de backup (150 MB) */
@@ -427,23 +435,41 @@ function sanitizeTask(item: any): Task | null {
   const validModules = ['geral', 'leitura', 'treino', 'escrita', 'estudos', 'trabalho']
   const module = validModules.includes(item.module) ? item.module : 'geral'
 
-  const validPriorities = ['alta', 'media', 'baixa']
-  const priority = validPriorities.includes(item.priority) ? item.priority : 'media'
+  const validPriorities = ['low', 'normal', 'high']
+  // aceita retrocompatibilidade alta/media/baixa ou low/normal/high
+  let priority = validPriorities.includes(item.priority) ? item.priority : 'normal'
+  if (item.priority === 'alta') priority = 'high'
+  else if (item.priority === 'baixa') priority = 'low'
+  else if (item.priority === 'media') priority = 'normal'
 
-  const validStatuses = ['pendente', 'concluida', 'cancelada']
-  const status = validStatuses.includes(item.status) ? item.status : 'pendente'
+  const validStatuses = ['open', 'done']
+  let status = validStatuses.includes(item.status) ? item.status : 'open'
+  if (item.status === 'concluida') status = 'done'
+  else if (item.status === 'pendente') status = 'open'
 
   let link: TaskLink | null = null
   if (item.link && typeof item.link === 'object') {
     if (
-      ['livro', 'treino', 'curso', 'projeto'].includes(item.link.type) &&
-      typeof item.link.id === 'string' &&
-      typeof item.link.title === 'string'
+      ['book', 'course', 'project', 'workoutDay'].includes(item.link.type) &&
+      typeof item.link.id === 'string'
     ) {
       link = {
         type: item.link.type,
         id: item.link.id,
-        title: item.link.title,
+      }
+    } else if (
+      ['livro', 'curso', 'projeto', 'treino'].includes(item.link.type) &&
+      typeof item.link.id === 'string'
+    ) {
+      const typeMap: Record<string, 'book' | 'course' | 'project' | 'workoutDay'> = {
+        livro: 'book',
+        curso: 'course',
+        projeto: 'project',
+        treino: 'workoutDay',
+      }
+      link = {
+        type: typeMap[item.link.type] || 'book',
+        id: item.link.id,
       }
     }
   }
@@ -455,7 +481,7 @@ function sanitizeTask(item: any): Task | null {
         .map((s: any) => ({
           id: typeof s.id === 'string' ? s.id : crypto.randomUUID(),
           title: s.title.slice(0, 100),
-          completed: Boolean(s.completed),
+          done: Boolean(s.done ?? s.completed),
         }))
     : []
 

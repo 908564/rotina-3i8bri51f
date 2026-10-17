@@ -66,6 +66,7 @@ export const taskRepository = {
     status?: TaskStatus
     completedAt?: string | null
     subtasks?: TaskSubtask[]
+    moduleData?: any
   }): Promise<Task> {
     const nowIso = new Date().toISOString()
     const existing = data.id ? await idb.get<Task>(idb.STORE_TASKS, data.id) : null
@@ -102,6 +103,7 @@ export const taskRepository = {
       status: nextStatus,
       completedAt: nextCompletedAt,
       subtasks: cleanSubtasks,
+      moduleData: data.moduleData !== undefined ? data.moduleData : existing?.moduleData || null,
       createdAt: existing?.createdAt || nowIso,
       updatedAt: nowIso,
       deletedAt: null,

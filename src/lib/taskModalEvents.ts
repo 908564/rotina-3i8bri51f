@@ -1,3 +1,5 @@
+import { TaskModuleData } from './types'
+
 export interface TaskModalContext {
   module?: 'escrita' | 'leitura' | 'treino' | 'estudos' | 'trabalho' | 'geral'
   link?: {
@@ -6,6 +8,8 @@ export interface TaskModalContext {
   }
   dueDate?: string | null
   taskId?: string // Quando fornecido, abre em modo edição
+  moduleData?: TaskModuleData | null
+  initialTitle?: string
 }
 
 let openModalHandler: ((context?: TaskModalContext) => void) | null = null

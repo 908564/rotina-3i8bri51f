@@ -25,6 +25,11 @@ import {
   Livro,
   Course,
   Project,
+  TaskEscritaData,
+  TaskLeituraData,
+  TaskTreinoData,
+  TaskEstudosData,
+  TaskTrabalhoData,
 } from '@/lib/types'
 import { taskRepository } from '@/lib/repositories/taskRepository'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
@@ -45,6 +50,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { ModuleSectionForm } from '@/components/ModuleSectionForm'
+import { BookFormModal } from '@/components/BookFormModal'
+import { validateAndCleanModuleData, hasFilledModuleData } from '@/lib/moduleDataValidation'
 
 export const MODULE_COLORS: Record<
   TaskModule,
@@ -92,25 +100,45 @@ export function TaskModal() {
   // Diálogos de confirmação
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [confirmSwitchModuleOpen, setConfirmSwitchModuleOpen] = useState(false)
+  const [pendingModule, setPendingModule] = useState<TaskModule | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [quickBookModalOpen, setQuickBookModalOpen] = useState(false)
 
-  // Itens para vínculo
+  // ModuleData por módulo
+  const [escritaData, setEscritaData] = useState<TaskEscritaData>({ tipo: 'diario' })
+  const [leituraData, setLeituraData] = useState<TaskLeituraData>({})
+  const [treinoData, setTreinoData] = useState<TaskTreinoData>({
+    tipo: 'musculacao',
+    musculacao: { subtipo: 'academia', diaOuGrupo: '' },
+  })
+  const [estudosData, setEstudosData] = useState<TaskEstudosData>({
+    tipoAtividade: 'assistir_aula',
+  })
+  const [trabalhoData, setTrabalhoData] = useState<TaskTrabalhoData>({
+    tipo: 'tarefa',
+    sugerirConquista: false,
+  })
+
+  // Itens para vínculo e histórico de esportes
   const [books, setBooks] = useState<Livro[]>([])
   const [courses, setCourses] = useState<Course[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [workoutDays, setWorkoutDays] = useState<{ dayOfWeek: number; name: string }[]>([])
+  const [sportSuggestions, setSportSuggestions] = useState<string[]>([])
 
   const titleInputRef = useRef<HTMLInputElement>(null)
 
-  // Carrega opções de vínculo
+  // Carrega opções de vínculo e histórico
   useEffect(() => {
     async function loadEntities() {
       try {
-        const [b, c, p, w] = await Promise.all([
+        const [b, c, p, w, logs] = await Promise.all([
           leituraRepository.getLivros(),
           estudosRepository.getCourses(),
           trabalhoRepository.getProjects(),
           treinoRepository.getWeeklyPlans(),
+          treinoRepository.getAllLogs?.() || [],
         ])
         // Livros 'lendo' primeiro
         const sortedBooks = [...b].sort((x, y) => {
@@ -130,6 +158,12 @@ export function TaskModal() {
             name: `${dayNames[d.dayOfWeek - 1] || 'Dia'} ${d.workoutName ? `(${d.workoutName})` : ''}`,
           }))
         setWorkoutDays(daysWithPlan)
+
+        // Sugestões de esportes
+        const sports = Array.from(
+          new Set(logs.map((l: any) => l.sportName || l.workoutName).filter(Boolean)),
+        ).slice(0, 6)
+        setSportSuggestions(sports as string[])
       } catch {
         // Fallback silencioso
       }
@@ -162,6 +196,39 @@ export function TaskModal() {
         setReminder(existing.reminder)
         setPriority(existing.priority)
         setSubtasks(existing.subtasks || [])
+
+        // Popula moduleData existente
+        if (existing.moduleData && existing.moduleData.module === existing.module) {
+          const md = existing.moduleData.data || {}
+          if (existing.module === 'escrita') {
+            setEscritaData({
+              tipo: md.tipo || 'diario',
+              tema: md.tema,
+              metaMinutos: md.metaMinutos,
+            })
+          } else if (existing.module === 'leitura') {
+            setLeituraData({
+              bookId: md.bookId,
+              metaPaginas: md.metaPaginas,
+              metaMinutos: md.metaMinutos,
+              atePagina: md.atePagina,
+            })
+          } else if (existing.module === 'treino') {
+            setTreinoData(md)
+          } else if (existing.module === 'estudos') {
+            setEstudosData(md)
+          } else if (existing.module === 'trabalho') {
+            setTrabalhoData(md)
+          }
+        } else {
+          // Defaults limpos
+          setEscritaData({ tipo: 'diario' })
+          setLeituraData({})
+          setTreinoData({ tipo: 'musculacao', musculacao: { subtipo: 'academia', diaOuGrupo: '' } })
+          setEstudosData({ tipoAtividade: 'assistir_aula' })
+          setTrabalhoData({ tipo: 'tarefa', sugerirConquista: false })
+        }
+
         setIsOpen(true)
         setTimeout(() => titleInputRef.current?.focus(), 150)
         return
@@ -170,7 +237,7 @@ export function TaskModal() {
 
     // Criação nova
     setEditingTask(null)
-    setTitle('')
+    setTitle(ctx?.initialTitle || '')
     const targetModule = ctx?.module || 'geral'
     setModule(targetModule)
     setLink(ctx?.link || null)
@@ -179,6 +246,30 @@ export function TaskModal() {
     setReminder(false)
     setPriority('normal')
     setSubtasks([])
+
+    // Inicializa moduleData do contexto (se fornecido) ou limpo
+    if (ctx?.moduleData && ctx.moduleData.module === targetModule) {
+      const md = ctx.moduleData.data || {}
+      if (targetModule === 'escrita') setEscritaData(md)
+      else if (targetModule === 'leitura') setLeituraData(md)
+      else if (targetModule === 'treino') setTreinoData(md)
+      else if (targetModule === 'estudos') setEstudosData(md)
+      else if (targetModule === 'trabalho') setTrabalhoData(md)
+    } else {
+      setEscritaData({ tipo: 'diario' })
+      setLeituraData(ctx?.link?.type === 'book' ? { bookId: ctx.link.id } : {})
+      setTreinoData({ tipo: 'musculacao', musculacao: { subtipo: 'academia', diaOuGrupo: '' } })
+      setEstudosData({
+        tipoAtividade: 'assistir_aula',
+        courseId: ctx?.link?.type === 'course' ? ctx.link.id : undefined,
+      })
+      setTrabalhoData({
+        tipo: 'tarefa',
+        projectId: ctx?.link?.type === 'project' ? ctx.link.id : undefined,
+        sugerirConquista: false,
+      })
+    }
+
     setIsOpen(true)
     setTimeout(() => titleInputRef.current?.focus(), 150)
   }
@@ -196,10 +287,38 @@ export function TaskModal() {
     }
   }, [activeModules])
 
-  // Troca de módulo limpa o vínculo
+  // Troca de módulo limpa os campos do módulo anterior e pergunta confirmação se houver dados preenchidos
   const handleSelectModule = (mod: TaskModule) => {
+    if (mod === module) return
+
+    const hasData = hasFilledModuleData(
+      module,
+      escritaData,
+      leituraData,
+      treinoData,
+      estudosData,
+      trabalhoData,
+    )
+
+    if (hasData) {
+      setPendingModule(mod)
+      setConfirmSwitchModuleOpen(true)
+    } else {
+      executeModuleSwitch(mod)
+    }
+  }
+
+  const executeModuleSwitch = (mod: TaskModule) => {
     setModule(mod)
     setLink(null)
+    // Limpa campos do módulo anterior
+    setEscritaData({ tipo: 'diario' })
+    setLeituraData({})
+    setTreinoData({ tipo: 'musculacao', musculacao: { subtipo: 'academia', diaOuGrupo: '' } })
+    setEstudosData({ tipoAtividade: 'assistir_aula' })
+    setTrabalhoData({ tipo: 'tarefa', sugerirConquista: false })
+    setPendingModule(null)
+    setConfirmSwitchModuleOpen(false)
   }
 
   // Fechamento com verificação de descarte
