@@ -110,7 +110,7 @@ export function TaskModal() {
           leituraRepository.getLivros(),
           estudosRepository.getCourses(),
           trabalhoRepository.getProjects(),
-          treinoRepository.getPlanoSemanal(),
+          treinoRepository.getWeeklyPlans(),
         ])
         // Livros 'lendo' primeiro
         const sortedBooks = [...b].sort((x, y) => {
@@ -127,7 +127,7 @@ export function TaskModal() {
           .filter((d) => d.exercises && d.exercises.length > 0)
           .map((d) => ({
             dayOfWeek: d.dayOfWeek,
-            name: `${dayNames[d.dayOfWeek - 1] || 'Dia'} ${d.description ? `(${d.description})` : ''}`,
+            name: `${dayNames[d.dayOfWeek - 1] || 'Dia'} ${d.workoutName ? `(${d.workoutName})` : ''}`,
           }))
         setWorkoutDays(daysWithPlan)
       } catch {
@@ -455,7 +455,7 @@ export function TaskModal() {
                 <option value="">Nenhum curso vinculado</option>
                 {courses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.title}
+                    {c.name}
                   </option>
                 ))}
               </select>

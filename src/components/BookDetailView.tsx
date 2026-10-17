@@ -10,6 +10,7 @@ import {
   BookOpen,
   Target,
   Sparkles,
+  Check,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Livro, LivroAnotacao, LeituraHistorico, LivroMeta, Task } from '@/lib/types'

@@ -90,9 +90,9 @@ export default function MaisPage() {
   // Conta & Sincronização na nuvem
   const { user, syncMeta, triggerSync, signOut } = useAuth()
   const [authModalOpen, setAuthModalOpen] = useState(false)
-  const [authModalMode, setAuthModalMode] = useState<'welcome' | 'signin' | 'signup' | 'forgot'>(
-    'signin',
-  )
+  const [authModalMode, setAuthModalMode] = useState<
+    'welcome' | 'signin' | 'signup' | 'forgot' | 'verify'
+  >('signin')
   const [syncingManual, setSyncingManual] = useState(false)
   const [signOutDialogOpen, setSignOutDialogOpen] = useState(false)
   const [signOutKeepLocal, setSignOutKeepLocal] = useState(true)
@@ -531,6 +531,19 @@ export default function MaisPage() {
                   </div>
                   <div className="text-xs text-muted-foreground">{user.email}</div>
                 </div>
+
+                {!user.verified && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setAuthModalMode('verify')
+                      setAuthModalOpen(true)
+                    }}
+                    className="h-8 px-3 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white"
+                  >
+                    Confirmar e-mail
+                  </Button>
+                )}
 
                 <div className="text-left sm:text-right">
                   <div className="text-[11px] text-muted-foreground">

@@ -104,11 +104,20 @@ export const RedefinirSenhaPage: React.FC = () => {
             </div>
           ) : !token ? (
             <div className="text-center space-y-4 pt-2">
-              <div className="flex items-center justify-center gap-2 text-red-500 text-sm">
-                <AlertCircle className="w-5 h-5" />
-                Link inválido ou sem token.
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-6 h-6" />
               </div>
-              <Button asChild variant="outline" className="w-full h-11 rounded-xl text-xs">
+              <div className="space-y-1">
+                <h2 className="text-base font-bold text-foreground">Link inválido ou expirado</h2>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  O token de redefinição não foi encontrado na URL ou expirou. Solicite um novo link
+                  no app.
+                </p>
+              </div>
+              <Button
+                asChild
+                className="w-full h-12 rounded-xl text-sm font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+              >
                 <Link to="/">Voltar ao início</Link>
               </Button>
             </div>

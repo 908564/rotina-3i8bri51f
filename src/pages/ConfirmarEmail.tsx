@@ -18,14 +18,16 @@ export const ConfirmarEmailPage: React.FC = () => {
   useEffect(() => {
     if (!token) {
       setLoading(false)
-      setErrorMsg('Token de verificação ausente ou inválido.')
+      setErrorMsg('Token de verificação ausente ou link inválido.')
       return
     }
 
     confirmVerification(token).then(({ error }) => {
       setLoading(false)
       if (error) {
-        setErrorMsg('Não foi possível verificar o e-mail. O link pode ter expirado.')
+        setErrorMsg(
+          'Link de confirmação inválido ou expirado. Você pode solicitar um novo e-mail pelo app.',
+        )
       } else {
         setSuccess(true)
       }
@@ -65,11 +67,17 @@ export const ConfirmarEmailPage: React.FC = () => {
                 <AlertCircle className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <h1 className="text-xl font-bold text-foreground">Falha na verificação</h1>
-                <p className="text-xs text-muted-foreground">{errorMsg}</p>
+                <h1 className="text-xl font-bold text-foreground">Link inválido ou expirado</h1>
+                <p className="text-xs text-muted-foreground leading-relaxed">{errorMsg}</p>
               </div>
+              <Button
+                asChild
+                className="w-full h-12 rounded-xl text-sm font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+              >
+                <Link to="/">Voltar ao aplicativo</Link>
+              </Button>
               <Button asChild variant="outline" className="w-full h-11 rounded-xl text-xs">
-                <Link to="/">Voltar ao início</Link>
+                <Link to="/mais">Ir para Minha Conta</Link>
               </Button>
             </div>
           )}

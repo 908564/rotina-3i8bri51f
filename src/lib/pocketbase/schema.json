@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-17T14:09:53.819Z",
+  "generatedAt": "2026-10-17T14:44:13.439Z",
   "collections": [
     {
       "name": "users",
@@ -222,6 +222,67 @@
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_sync_files_user_clientId ON sync_files (user, clientId)"]
+    },
+    {
+      "name": "verification_codes",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "email",
+          "type": "email",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "expiresAt",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "attempts",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "consumed",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_verification_codes_email ON verification_codes (email)",
+        "CREATE INDEX idx_verification_codes_expires ON verification_codes (expiresAt)"
+      ]
     }
   ]
 }

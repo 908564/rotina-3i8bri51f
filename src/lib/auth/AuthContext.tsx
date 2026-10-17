@@ -36,6 +36,7 @@ export interface AuthContextType {
   confirmPasswordReset: (token: string, password: string) => Promise<{ error: any }>
   requestVerification: (email: string) => Promise<{ error: any }>
   confirmVerification: (token: string) => Promise<{ error: any }>
+  verifyCode: (email: string, code: string) => Promise<{ error: any; message?: string }>
   triggerSync: () => Promise<boolean>
   refreshUser: () => Promise<void>
 }
@@ -352,6 +353,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const verifyCode = async (email: string, code: string) => {
+    try {
+      const res = await pb.send<{ success: boolean; verified: boolean; message: string }>(
+        '/backend/v1/rotina/verificar-codigo',
+        {
+          method: 'POST',
+          body: {
+            email: email.trim().toLowerCase(),
+            code: code.trim(),
+          },
+        },
+      )
+      await refreshUser()
+      return { error: null, message: res?.message }
+    } catch (error: any) {
+      const msg =
+        error?.response?.message ||
+        error?.data?.message ||
+        error?.message ||
+        'Código de verificação inválido ou expirado.'
+      return { error, message: msg }
+    }
+  }
+
   const triggerSync = async () => {
     return await syncEngine.sync()
   }
@@ -369,6 +394,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         confirmPasswordReset,
         requestVerification,
         confirmVerification,
+        verifyCode,
         triggerSync,
         refreshUser,
       }}

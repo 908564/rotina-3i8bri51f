@@ -21,7 +21,7 @@ import {
 import { Link } from 'react-router-dom'
 
 interface AuthModalProps {
-  initialMode?: 'welcome' | 'signin' | 'signup' | 'forgot'
+  initialMode?: 'welcome' | 'signin' | 'signup' | 'forgot' | 'verify'
   onClose: () => void
   onSuccess?: () => void
 }
@@ -31,10 +31,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const {
+    signIn,
+    signUp,
+    requestPasswordReset,
+    requestVerification,
+    confirmVerification,
+    verifyCode,
+    refreshUser,
+    user,
+  } = useAuth()
+
   const [mode, setMode] = useState<'welcome' | 'signin' | 'signup' | 'forgot' | 'verify'>(
     initialMode,
   )
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(user?.email || '')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [name, setName] = useState('')
@@ -42,6 +53,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
   const [verificationWarning, setVerificationWarning] = useState<string | null>(null)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [codeSubmitting, setCodeSubmitting] = useState(false)
+  const [codeError, setCodeError] = useState<string | null>(null)
 
   // Mensagens de erro por campo
   const [fieldErrors, setFieldErrors] = useState<{
@@ -51,8 +65,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     terms?: string
     general?: string
   }>({})
-
-  const { signIn, signUp, requestPasswordReset, requestVerification, refreshUser, user } = useAuth()
   const { toast } = useToast()
 
   const passwordStrength = evaluatePasswordStrength(password)
@@ -280,6 +292,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return prev - 1
       })
     }, 1000)
+  }
+
+  const handleVerifyWithCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanEmail = email.trim().toLowerCase()
+    const cleanCode = verificationCode.trim()
+
+    if (!cleanCode || cleanCode.length !== 6) {
+      setCodeError('Digite o código de 6 dígitos recebido por e-mail.')
+      return
+    }
+
+    setCodeError(null)
+    setCodeSubmitting(true)
+    const { error, message } = await verifyCode(cleanEmail, cleanCode)
+    setCodeSubmitting(false)
+
+    if (error) {
+      setCodeError(message || 'Código inválido ou expirado.')
+      toast({
+        title: 'Código inválido',
+        description: message || 'Verifique o código ou solicite um novo.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    toast({
+      title: 'E-mail verificado com sucesso!',
+      description: 'Sua conta está ativa e sincronizando.',
+    })
+    if (onSuccess) onSuccess()
+    onClose()
   }
 
   const handleCheckVerified = async () => {
@@ -764,8 +809,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <h2 className="text-xl font-bold text-foreground">Confirme seu e-mail</h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Enviamos uma mensagem de confirmação para{' '}
-                  <strong className="text-foreground">{email.trim().toLowerCase()}</strong>. Abra o
-                  link no e-mail para ativar a sincronização na nuvem.
+                  <strong className="text-foreground">{email.trim().toLowerCase()}</strong>.
                 </p>
                 {verificationWarning && (
                   <div
@@ -778,18 +822,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 )}
               </div>
 
-              <div className="space-y-2.5 pt-2">
+              {/* Formulário para validar por código de 6 dígitos */}
+              <form onSubmit={handleVerifyWithCode} className="space-y-3 pt-1 text-left">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="verification-code"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Código de 6 dígitos (recebido por e-mail)
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="verification-code"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={verificationCode}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                        setVerificationCode(val)
+                        if (codeError) setCodeError(null)
+                      }}
+                      className="h-11 rounded-xl text-center text-lg font-mono tracking-widest"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={codeSubmitting || verificationCode.length !== 6}
+                      className="h-11 px-4 rounded-xl text-xs font-semibold bg-[#B4540F] hover:bg-[#964208] text-white cursor-pointer"
+                    >
+                      {codeSubmitting ? <RotateCcw className="w-4 h-4 animate-spin" /> : 'Validar'}
+                    </Button>
+                  </div>
+                  {codeError && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 mt-1 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {codeError}
+                    </p>
+                  )}
+                </div>
+              </form>
+
+              <div className="relative py-1">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground text-[11px]">
+                    ou pelo link do e-mail
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
                 <Button
                   onClick={handleCheckVerified}
                   disabled={loading}
-                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white cursor-pointer"
+                  variant="outline"
+                  className="w-full h-11 rounded-xl text-sm font-semibold border-border text-foreground hover:bg-muted cursor-pointer"
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">
-                      <RotateCcw className="w-4 h-4 animate-spin" /> Verificando...
+                      <RotateCcw className="w-4 h-4 animate-spin" /> Atualizando sessão...
                     </span>
                   ) : (
-                    'Já confirmei'
+                    'Já confirmei pelo link'
                   )}
                 </Button>
 
@@ -804,12 +905,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </Button>
                   <Button
                     variant="ghost"
-                    onClick={() => setMode('signup')}
+                    onClick={() => {
+                      setVerificationWarning(null)
+                      setCodeError(null)
+                      setVerificationCode('')
+                      setMode('signup')
+                    }}
                     className="flex-1 h-11 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Trocar e-mail
                   </Button>
                 </div>
+
+                <p className="text-[11px] text-muted-foreground pt-1">
+                  Não recebeu? Lembre-se de verificar sua pasta de <strong>spam</strong> ou{' '}
+                  <strong>lixo eletrônico</strong>. O código expira em 10 minutos.
+                </p>
               </div>
             </div>
           )}

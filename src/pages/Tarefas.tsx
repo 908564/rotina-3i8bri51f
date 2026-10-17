@@ -267,7 +267,7 @@ export default function TarefasPage() {
       return booksMap.get(link.id)?.title || 'Livro'
     }
     if (link.type === 'course') {
-      return coursesMap.get(link.id)?.title || 'Curso'
+      return coursesMap.get(link.id)?.name || 'Curso'
     }
     if (link.type === 'project') {
       return projectsMap.get(link.id)?.name || 'Projeto'
