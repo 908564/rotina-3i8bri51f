@@ -30,6 +30,8 @@ import {
 import { getTodayDateKey } from '@/lib/dateUtils'
 import { ModuleKey } from '@/lib/types'
 import { APP_VERSION } from '@/lib/version'
+import { MedalhasView } from '@/components/MedalhasView'
+import { LembretesCelebracoesView } from '@/components/LembretesCelebracoesView'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -100,6 +102,7 @@ export default function MaisPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleteKeepLocal, setDeleteKeepLocal] = useState(true)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [subView, setSubView] = useState<'medalhas' | 'lembretes' | null>(null)
 
   // Storage info (cota e persistência)
   const [isPersisted, setIsPersisted] = useState<boolean | null>(null)
@@ -464,16 +467,47 @@ export default function MaisPage() {
     },
   ]
 
+  if (subView === 'medalhas') {
+    return (
+      <div className="pt-2 pb-16">
+        <MedalhasView onBack={() => setSubView(null)} />
+      </div>
+    )
+  }
+
+  if (subView === 'lembretes') {
+    return (
+      <div className="pt-2 pb-16">
+        <LembretesCelebracoesView onBack={() => setSubView(null)} />
+      </div>
+    )
+  }
+
+  if (subView === 'medalhas') {
+    return (
+      <div className="pt-2 pb-16">
+        <MedalhasView onBack={() => setSubView(null)} />
+      </div>
+    )
+  }
+
+  if (subView === 'lembretes') {
+    return (
+      <div className="pt-2 pb-16">
+        <LembretesCelebracoesView onBack={() => setSubView(null)} />
+      </div>
+    )
+  }
+
   return (
-    <div className="pt-2 pb-16 space-y-6 max-w-2xl mx-auto">
-      {/* CABEÇALHO */}
+    <div className="pt-2 pb-16 space-y-6">
+      {/* CABEÇALHO */}{' '}
       <div className="flex items-center gap-2.5 pb-2 border-b border-border/60">
         <div className="w-8 h-8 rounded-lg bg-muted text-foreground flex items-center justify-center">
           <Settings className="w-4 h-4" />
         </div>
         <h1 className="text-xl font-bold tracking-tight text-foreground">Mais</h1>
       </div>
-
       {/* ENTRADA DIRETA PARA RESUMO DA SEMANA */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-3 sm:p-4">
@@ -499,7 +533,58 @@ export default function MaisPage() {
           </button>
         </CardContent>
       </Card>
+      {/* PARTE 6: ATALHOS PARA MEDALHAS E LEMBRETES/CELEBRAÇÕES */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
+          <CardContent className="p-4">
+            <button
+              type="button"
+              onClick={() => setSubView('medalhas')}
+              className="w-full flex items-center justify-between text-left group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground group-hover:text-amber-500 transition-colors">
+                    Medalhas
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Suas conquistas, metas e ofensivas
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </CardContent>
+        </Card>
 
+        <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
+          <CardContent className="p-4">
+            <button
+              type="button"
+              onClick={() => setSubView('lembretes')}
+              className="w-full flex items-center justify-between text-left group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#E8883A]/15 text-[#E8883A] flex items-center justify-center shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground group-hover:text-[#E8883A] transition-colors">
+                    Lembretes e Celebrações
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Horários e avisos suaves de rotina
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </CardContent>
+        </Card>
+      </div>
       {/* SEÇÃO CONTA & SINCRONIZAÇÃO NA NUVEM */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
@@ -655,7 +740,6 @@ export default function MaisPage() {
           )}
         </CardContent>
       </Card>
-
       {/* 1. SEÇÃO APARÊNCIA */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
@@ -693,7 +777,6 @@ export default function MaisPage() {
           </div>
         </CardContent>
       </Card>
-
       {/* 2. SEÇÃO MÓDULOS ATIVOS */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
@@ -743,7 +826,6 @@ export default function MaisPage() {
           </div>
         </CardContent>
       </Card>
-
       {/* 3. SEÇÃO BACKUP E ARMAZENAMENTO */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-3">
@@ -883,7 +965,6 @@ export default function MaisPage() {
           </div>
         </CardContent>
       </Card>
-
       {/* 5. ZONA DE PERIGO (LIMPAR TUDO) */}
       <Card className="rounded-2xl border-destructive/30 bg-destructive/5 shadow-subtle overflow-hidden">
         <CardContent className="p-4 sm:p-5 flex items-center justify-between">
@@ -906,7 +987,6 @@ export default function MaisPage() {
           </Button>
         </CardContent>
       </Card>
-
       {/* SOBRE / PWA INFORMAÇÕES */}
       <div className="text-center text-xs text-muted-foreground space-y-1.5 pt-2">
         <p className="font-semibold text-foreground">
@@ -923,7 +1003,6 @@ export default function MaisPage() {
           </a>
         </div>
       </div>
-
       {/* MODAL DE CONFIRMAÇÃO PARA DESATIVAR MÓDULO */}
       <AlertDialog
         open={Boolean(moduleConfirmState)}
@@ -948,7 +1027,6 @@ export default function MaisPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       {/* MODAL DE CONFIRMAÇÃO DE IMPORTAÇÃO SEGURA */}
       <AlertDialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
         <AlertDialogContent className="rounded-2xl bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1054,7 +1132,6 @@ export default function MaisPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       {/* MODAL DE DUPLA CONFIRMAÇÃO PARA LIMPAR TUDO */}
       <AlertDialog open={clearDataDialogOpen} onOpenChange={setClearDataDialogOpen}>
         <AlertDialogContent className="rounded-2xl bg-card border-border">
@@ -1081,7 +1158,6 @@ export default function MaisPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       {/* MODAL DE FEEDBACK COM COPIAR PARA CLIPBOARD */}
       <Dialog open={feedbackModalOpen} onOpenChange={setFeedbackModalOpen}>
         <DialogContent className="sm:max-w-md bg-card rounded-2xl p-6 border border-border">
@@ -1123,7 +1199,6 @@ export default function MaisPage() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* MODAL DE AUTENTICAÇÃO */}
       {authModalOpen && (
         <AuthModal
@@ -1132,7 +1207,6 @@ export default function MaisPage() {
           onSuccess={() => setAuthModalOpen(false)}
         />
       )}
-
       {/* DIÁLOGO DE SAIR DA CONTA */}
       <AlertDialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
         <AlertDialogContent className="rounded-2xl bg-card border-border">
@@ -1169,7 +1243,6 @@ export default function MaisPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       {/* DIÁLOGO DE EXCLUIR CONTA */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="rounded-2xl bg-card border-border">

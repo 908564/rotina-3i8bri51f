@@ -323,7 +323,125 @@ export const leituraRepository = {
       },
     )
 
+    // Atualiza module_days com o progresso
+    try {
+      const { moduleDaysRepository } = await import('./moduleDaysRepository')
+      const existing = await moduleDaysRepository.getByDateAndModule(dateStr, 'leitura')
+      const currentVal = (existing?.value || 0) + (pagesAdded || minutes || 0)
+      const goalDefined = existing
+        ? existing.goalDefined
+        : Boolean(effectiveGoal?.dailyPages || effectiveGoal?.dailyMinutes)
+
+      const targetP = effectiveGoal?.dailyPages || 0
+      const targetM = effectiveGoal?.dailyMinutes || 0
+      const hasGoal = targetP > 0 || targetM > 0
+      const metPages = targetP > 0 && currentVal >= targetP
+      const metMinutes = targetM > 0 && (minutes || 0) >= targetM
+      const isDone = hasGoal ? metPages || metMinutes : currentVal > 0
+
+      await moduleDaysRepository.recordModuleDay({
+        date: dateStr,
+        module: 'leitura',
+        goalDefined: hasGoal || goalDefined,
+        done: isDone,
+        source: existing?.source === 'manual' ? 'manual' : 'auto',
+        value: currentVal,
+      })
+
+      if (isDone || newStatus === 'concluido') {
+        const { medalsRepository } = await import('./medalsRepository')
+        const streak = await moduleDaysRepository.calculateModuleStreak('leitura', dateStr)
+        await medalsRepository.evaluateMedalsForModule('leitura', dateStr, streak)
+      }
+    } catch {
+      // Ignora erro em ambientes parciais
+    }
+
     return { history: historyEntry, book: updatedLivro }
+  },
+
+  /**
+   * Check-in manual diário de leitura:
+   * Marca a leitura de hoje como feita sem preencher números.
+   * Grava em module_days com source = manual.
+   * Concede a medalha do dia e dispara avaliação de medalhas.
+   */
+  async setManualCheckin(date: string = getTodayDateKey(), done: boolean = true): Promise<void> {
+    const { moduleDaysRepository } = await import('./moduleDaysRepository')
+    const { medalsRepository } = await import('./medalsRepository')
+
+    if (done) {
+      await moduleDaysRepository.recordModuleDay({
+        date,
+        module: 'leitura',
+        goalDefined: true,
+        done: true,
+        source: 'manual',
+        value: 1,
+      })
+      const streak = await moduleDaysRepository.calculateModuleStreak('leitura', date)
+      await medalsRepository.evaluateMedalsForModule('leitura', date, streak)
+    } else {
+      // Desfazer check-in manual
+      const allHist = await idb.getAll<LeituraHistorico>(idb.STORE_LEITURA_HISTORICO)
+      const dayHist = allHist.filter((h) => h.dateRead === date)
+      const dayPages = dayHist.reduce((s, h) => s + (h.pagesAdded || 0), 0)
+      const dayMins = dayHist.reduce((s, h) => s + (h.minutes || 0), 0)
+
+      const readingBooks = await this.getReadingBooks()
+      let dailyPagesTarget = 0
+      let dailyMinutesTarget = 0
+      for (const b of readingBooks) {
+        const g = getBookGoalForDate(b, date)
+        if (g?.dailyPages) dailyPagesTarget += g.dailyPages
+        if (g?.dailyMinutes) dailyMinutesTarget += g.dailyMinutes
+      }
+
+      const hasGoal = dailyPagesTarget > 0 || dailyMinutesTarget > 0
+      let autoDone = false
+      if (hasGoal) {
+        if (dailyPagesTarget > 0 && dayPages >= dailyPagesTarget) autoDone = true
+        if (dailyMinutesTarget > 0 && dayMins >= dailyMinutesTarget) autoDone = true
+      }
+
+      await moduleDaysRepository.recordModuleDay(
+        {
+          date,
+          module: 'leitura',
+          goalDefined: hasGoal,
+          done: autoDone,
+          source: 'auto',
+          value: dayPages || dayMins,
+        },
+        true,
+      )
+
+      if (!autoDone) {
+        await medalsRepository.revokeDailyMedal('daily_goal_leitura', date)
+        const { celebrationService } = await import('../celebrationService')
+        celebrationService.resetCelebration('leitura', date)
+      }
+    }
+  },
+
+  /**
+   * Consulta se o dia tem check-in de leitura concluído (automático ou manual)
+   * e qual é a fonte (auto | manual | timer).
+   */
+  async getDayCheckinStatus(date: string = getTodayDateKey()): Promise<{
+    isDone: boolean
+    source: 'auto' | 'manual' | 'timer'
+    isManual: boolean
+  }> {
+    const { moduleDaysRepository } = await import('./moduleDaysRepository')
+    const md = await moduleDaysRepository.getByDateAndModule(date, 'leitura')
+    const isDone = Boolean(md && md.done)
+    const source = md?.source || 'auto'
+    return {
+      isDone,
+      source,
+      isManual: isDone && source === 'manual',
+    }
   },
 
   async deleteHistoricoEntry(id: string): Promise<void> {

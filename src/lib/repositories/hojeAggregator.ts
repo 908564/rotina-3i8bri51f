@@ -356,13 +356,21 @@ export async function getFastTodayData(
   }
 
   if (activeModules.leitura) {
+    const existingLeituraDay = await moduleDaysRepository.getByDateAndModule(
+      todayDateKey,
+      'leitura',
+    )
+    const currentSource = existingLeituraDay?.source || 'auto'
+    const isManuallyDone = existingLeituraDay?.source === 'manual' && existingLeituraDay.done
+    const finalLeituraDone = isManuallyDone || isLeituraCompleted
+
     await moduleDaysRepository.recordModuleDay({
       date: todayDateKey,
       module: 'leitura',
       goalDefined: leituraHasGoal,
-      done: isLeituraCompleted,
-      source: 'auto',
-      value: todayPages || todayReadingMinutes,
+      done: finalLeituraDone,
+      source: isManuallyDone ? 'manual' : currentSource === 'timer' ? 'timer' : 'auto',
+      value: todayPages || todayReadingMinutes || (isManuallyDone ? 1 : 0),
     })
   }
 

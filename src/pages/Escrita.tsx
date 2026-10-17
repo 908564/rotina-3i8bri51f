@@ -29,6 +29,7 @@ import {
 import { useAutosave } from '@/hooks/useAutosave'
 import { toast } from '@/hooks/use-toast'
 import { ModuleTasksView } from '@/components/ModuleTasksView'
+import { ModuleStreakCard } from '@/components/ModuleStreakCard'
 
 function getTodayDateStr(): string {
   return getTodayDateKey()
@@ -295,6 +296,17 @@ export default function EscritaPage() {
     <div className="pt-2 pb-8 max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
       {/* PAINEL PRINCIPAL DO EDITOR */}
       <div className="flex-1 space-y-4">
+        {/* OFENSIVA POR MÓDULO (PARTE 6.1) */}
+        <ModuleStreakCard
+          module="escrita"
+          isGoalPending={!hasCurrentNote}
+          todayStatusText={
+            hasCurrentNote
+              ? 'Anotação de hoje registrada! Continue cultivando suas ideias.'
+              : 'Escreva suas reflexões de hoje para manter sua ofensiva.'
+          }
+        />
+
         {/* CABEÇALHO */}
         <div className="flex items-center justify-between pb-2 border-b border-border/60">
           <div className="flex items-center gap-2">

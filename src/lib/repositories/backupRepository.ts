@@ -701,16 +701,19 @@ function sanitizeMedal(item: any): Medal | null {
   if (!item || typeof item !== 'object') return null
   if (!isValidUuid(item.id) || !isValidIsoDate(item.createdAt) || !isValidIsoDate(item.updatedAt))
     return null
-  if (typeof item.code !== 'string' || !item.code.trim()) return null
+  const key = typeof item.key === 'string' && item.key.trim() ? item.key : item.code
+  if (typeof key !== 'string' || !key.trim()) return null
   if (typeof item.title !== 'string' || !item.title.trim()) return null
   if (!isValidIsoDate(item.earnedAt)) return null
 
   return {
     id: item.id,
-    code: item.code,
+    key,
+    code: key,
     title: item.title,
     description: typeof item.description === 'string' ? item.description : '',
     module: typeof item.module === 'string' ? item.module : undefined,
+    date: typeof item.date === 'string' ? item.date : undefined,
     earnedAt: item.earnedAt,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -850,12 +853,16 @@ function sanitizeSettings(item: any): AppSettings | undefined {
     trabalho: Boolean(item.activeModules?.trabalho ?? true),
   }
 
+  const reminders =
+    item.reminders && typeof item.reminders === 'object' ? item.reminders : undefined
+
   return {
     theme: validThemes,
     activeModules,
     hasSeenOnboarding: Boolean(item.hasSeenOnboarding ?? true),
     firstTimeWelcomeDismissed: Boolean(item.firstTimeWelcomeDismissed ?? false),
     userName: typeof item.userName === 'string' ? item.userName : '',
+    reminders,
   }
 }
 

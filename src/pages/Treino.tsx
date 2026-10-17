@@ -20,6 +20,7 @@ import { ExerciseEvolutionModal } from '@/components/ExerciseEvolutionModal'
 import { CardioView } from '@/components/CardioView'
 import { OutrosTreinosView } from '@/components/OutrosTreinosView'
 import { ModuleTasksView } from '@/components/ModuleTasksView'
+import { ModuleStreakCard } from '@/components/ModuleStreakCard'
 import { ActivityPlan, ActivityLog } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { getTodayDateKey, getLocalDayOfWeek } from '@/lib/dateUtils'
@@ -115,6 +116,22 @@ export default function TreinoPage() {
       ) : (
         /* VISÃO PRINCIPAL DO PLANO SEMANAL */
         <div className="space-y-6">
+          {/* OFENSIVA POR MÓDULO (PARTE 6.1) */}
+          <ModuleStreakCard
+            module="treino"
+            isGoalPending={
+              !isSelectedWorkoutCompleted &&
+              Boolean(currentPlan && currentPlan.exercises.length > 0)
+            }
+            todayStatusText={
+              isSelectedWorkoutCompleted
+                ? 'Treinos de hoje concluídos! Excelente consistência.'
+                : currentPlan && currentPlan.exercises.length > 0
+                  ? 'Complete seu treino planejado para manter sua ofensiva.'
+                  : 'Dia de descanso planejado. Não quebra sua sequência!'
+            }
+          />
+
           {/* CABEÇALHO */}
           <div className="flex items-center justify-between pb-2 border-b border-border/60">
             <div className="flex items-center gap-2.5">

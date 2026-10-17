@@ -165,6 +165,38 @@ export const moduleDaysRepository = {
   },
 
   /**
+   * Calcula o melhor streak histórico para o módulo.
+   */
+  async calculateBestModuleStreak(module: ModuleDayKey): Promise<number> {
+    const all = await this.getAll()
+    const moduleDays = all.filter((md) => md.module === module)
+    if (moduleDays.length === 0) return 0
+
+    // Ordena do dia mais antigo para o mais recente
+    moduleDays.sort((a, b) => a.date.localeCompare(b.date))
+    let maxStreak = 0
+    let currentStreak = 0
+
+    for (const rec of moduleDays) {
+      if (!rec.goalDefined) {
+        // Neutro: descanso no treino ou sem meta não zera nem soma
+        continue
+      }
+      if (rec.done) {
+        currentStreak++
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak
+        }
+      } else {
+        currentStreak = 0
+      }
+    }
+
+    const current = await this.calculateModuleStreak(module)
+    return Math.max(maxStreak, current)
+  },
+
+  /**
    * Migração retrocompatível do histórico:
    * Se existirem registros em day_summaries ou nos históricos individuais (leitura_historico, treino_log, escrita_notes, study_sessions)
    * que ainda não existam em module_days, povoa module_days preservando todo o histórico sem perda.

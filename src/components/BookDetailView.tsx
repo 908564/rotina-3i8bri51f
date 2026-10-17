@@ -14,8 +14,15 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Livro, LivroAnotacao, LeituraHistorico, LivroMeta, Task } from '@/lib/types'
-import { leituraRepository } from '@/lib/repositories/leituraRepository'
+import { getBookGoalForDate, leituraRepository } from '@/lib/repositories/leituraRepository'
 import { taskRepository } from '@/lib/repositories/taskRepository'
+import { readingTimerService } from '@/lib/readingTimerService'
+import { ReadingTimerModal } from '@/components/ReadingTimerModal'
+import { CelebrationOverlay } from '@/components/CelebrationOverlay'
+import { celebrationService } from '@/lib/celebrationService'
+import { medalsRepository } from '@/lib/repositories/medalsRepository'
+import { settingsRepository } from '@/lib/repositories/settingsRepository'
+import { cn } from '@/lib/utils'
 import { openTaskModal } from '@/lib/taskModalEvents'
 import { getTodayDateKey, getDaysAgoKey } from '@/lib/dateUtils'
 import { Button } from '@/components/ui/button'
@@ -71,6 +78,13 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
   const [noteText, setNoteText] = useState('')
   const [notePage, setNotePage] = useState('')
 
+  // 5.1 Check-in diário e 5.2 Cronômetro
+  const [dayCheckin, setDayCheckin] = useState<{ isDone: boolean; isManual: boolean }>({
+    isDone: false,
+    isManual: false,
+  })
+  const [timerModalOpen, setTimerModalOpen] = useState(false)
+
   const { toast } = useToast()
 
   const loadData = useCallback(async () => {
@@ -84,7 +98,61 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
     setAnotacoes(notes)
     const hist = await leituraRepository.getHistoricoByBook(bookId)
     setHistorico(hist)
+    const chk = await leituraRepository.getDayCheckinStatus()
+    setDayCheckin(chk)
   }, [bookId, onBack])
+
+  // Celebração da Parte 6
+  const [celebrationOpen, setCelebrationOpen] = useState(false)
+  const [celebrationStreak, setCelebrationStreak] = useState(1)
+  const [celebrationMedal, setCelebrationMedal] = useState<any>(null)
+
+  const triggerCelebrationIfEligible = async () => {
+    try {
+      const today = getTodayDateKey()
+      if (celebrationService.hasCelebratedToday('leitura', today)) return
+      const s = await settingsRepository.getSettings()
+      if (s.reminders && s.reminders.celebrationsEnabled === false) return
+
+      const { moduleDaysRepository } = await import('@/lib/repositories/moduleDaysRepository')
+      const streak = await moduleDaysRepository.calculateModuleStreak('leitura', today)
+      const dailyMedal = await medalsRepository.getByKeyAndDate('daily_goal_leitura', today)
+
+      celebrationService.markCelebratedToday('leitura', today)
+      setCelebrationStreak(streak || 1)
+      setCelebrationMedal(dailyMedal || null)
+      setCelebrationOpen(true)
+    } catch {
+      /* intentionally ignored */
+    }
+  }
+
+  const handleToggleManualCheckin = async () => {
+    const nextState = !dayCheckin.isDone
+    await leituraRepository.setManualCheckin(getTodayDateKey(), nextState)
+    toast({
+      title: nextState ? 'Leitura de hoje concluída! ✓' : 'Check-in desfeito',
+      description: nextState
+        ? 'Marcada como feita via check-in manual.'
+        : 'O estado do dia foi recalculado.',
+    })
+    if (nextState) {
+      triggerCelebrationIfEligible()
+    }
+    await loadData()
+    onUpdated()
+  }
+
+  const handleStartTimer = async () => {
+    if (!book) return
+    const g = getBookGoalForDate(book, getTodayDateKey())
+    await readingTimerService.startTimer({
+      bookId: book.id,
+      bookTitle: book.title,
+      targetMinutes: g?.dailyMinutes,
+    })
+    setTimerModalOpen(true)
+  }
 
   useEffect(() => {
     loadData()
@@ -307,8 +375,59 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
             >
               <Plus className="w-4 h-4" /> Registrar leitura hoje
             </Button>
+            <Button
+              onClick={handleStartTimer}
+              variant="outline"
+              className="flex-1 sm:flex-initial min-h-[44px] px-5 rounded-xl border-[#34BEAA]/40 text-[#1F7F6E] dark:text-[#34BEAA] hover:bg-[#34BEAA]/10 font-bold text-sm shadow-xs flex items-center justify-center gap-2"
+            >
+              <Clock className="w-4 h-4" /> Iniciar leitura
+            </Button>
           </div>
         </div>
+      </div>
+
+      {/* 5.1: CONTROLE DE ESTADO DE HOJE DO LIVRO */}
+      <div className="p-4 rounded-2xl bg-card border border-border shadow-subtle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Hoje:
+          </span>
+          <span
+            className={cn(
+              'text-[11px] font-bold px-2.5 py-0.5 rounded-full',
+              dayCheckin.isDone
+                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+            )}
+          >
+            {dayCheckin.isDone ? 'Feito ✓' : 'Pendente'}
+          </span>
+          {dayCheckin.isManual && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+              Check-in manual
+            </span>
+          )}
+        </div>
+
+        {dayCheckin.isDone ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleToggleManualCheckin}
+            className="text-xs h-8 text-muted-foreground hover:text-foreground"
+          >
+            Desfazer
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleToggleManualCheckin}
+            className="text-xs h-8 rounded-xl border-[#34BEAA]/40 text-[#34BEAA] hover:bg-[#34BEAA]/10 font-semibold"
+          >
+            Marcar leitura de hoje como feita
+          </Button>
+        )}
       </div>
 
       {/* SEÇÃO: PROGRESSO DAS METAS DESTE LIVRO (SEMANAL E MENSAL POR LIVRO) */}
@@ -322,6 +441,16 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-[#34BEAA]" />
             <h3 className="text-sm font-bold text-foreground">Metas e Progresso do Livro</h3>
+            <span
+              className={cn(
+                'text-[10px] font-bold px-2 py-0.5 rounded-full ml-1',
+                dayCheckin.isDone
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+              )}
+            >
+              {dayCheckin.isDone ? 'Feito' : 'Pendente'}
+            </span>
           </div>
           {hasGoal && (
             <Button
@@ -674,6 +803,26 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
           loadData()
           onUpdated()
         }}
+      />
+
+      {/* MODAL DO CRONÔMETRO DE LEITURA */}
+      <ReadingTimerModal
+        open={timerModalOpen}
+        onClose={() => setTimerModalOpen(false)}
+        onFinished={() => {
+          triggerCelebrationIfEligible()
+          loadData()
+          onUpdated()
+        }}
+      />
+
+      {/* OVERLAY DE CELEBRAÇÃO (PARTE 6.2) */}
+      <CelebrationOverlay
+        open={celebrationOpen}
+        onClose={() => setCelebrationOpen(false)}
+        streakDays={celebrationStreak}
+        moduleName="Leitura"
+        earnedMedal={celebrationMedal}
       />
 
       {/* MODAL DE EDIÇÃO DE META DESTE LIVRO */}

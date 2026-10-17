@@ -11,6 +11,9 @@ import { Progress } from '@/components/ui/progress'
 import { BookFormModal } from '@/components/BookFormModal'
 import { BookDetailView } from '@/components/BookDetailView'
 import { ModuleTasksView } from '@/components/ModuleTasksView'
+import { ModuleStreakCard } from '@/components/ModuleStreakCard'
+import { FloatingReadingTimerChip } from '@/components/FloatingReadingTimerChip'
+import { ReadingTimerModal } from '@/components/ReadingTimerModal'
 import { cn } from '@/lib/utils'
 
 export default function LeituraPage() {
@@ -30,6 +33,7 @@ export default function LeituraPage() {
   // Modais
   const [formModalOpen, setFormModalOpen] = useState(false)
   const [editingBook, setEditingBook] = useState<Livro | null>(null)
+  const [timerModalOpen, setTimerModalOpen] = useState(false)
 
   const loadData = useCallback(async () => {
     const list = await leituraRepository.getLivros()
@@ -121,6 +125,19 @@ export default function LeituraPage() {
       ) : (
         /* VISÃO PRINCIPAL (BIBLIOTECA + DETALHE EM 2 COLUNAS NO TABLET) */
         <div className="space-y-6">
+          {/* OFENSIVA POR MÓDULO (PARTE 6.1) */}
+          <ModuleStreakCard
+            module="leitura"
+            isGoalPending={goals?.hasGoals ? goals.todayPages < goals.dailyPagesTarget : false}
+            todayStatusText={
+              goals?.hasGoals && goals.dailyPagesTarget > 0
+                ? goals.todayPages >= goals.dailyPagesTarget
+                  ? 'Você já bateu sua meta de leitura de hoje! Parabéns!'
+                  : `Falta ler ${Math.max(1, goals.dailyPagesTarget - goals.todayPages)} páginas para manter sua ofensiva.`
+                : 'Mantenha sua rotina diária de leitura ativa.'
+            }
+          />
+
           {/* CABEÇALHO */}
           <div className="flex items-center justify-between pb-2 border-b border-border/60">
             <div className="flex items-center gap-2.5">
@@ -489,6 +506,16 @@ export default function LeituraPage() {
           )}
         </div>
       )}
+
+      {/* CHIP FLUTUANTE DE LEITURA (PARTE 5.2) */}
+      <FloatingReadingTimerChip onClick={() => setTimerModalOpen(true)} />
+
+      {/* CRONÔMETRO DE LEITURA */}
+      <ReadingTimerModal
+        open={timerModalOpen}
+        onClose={() => setTimerModalOpen(false)}
+        onFinished={loadData}
+      />
 
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE LIVRO */}
       <BookFormModal

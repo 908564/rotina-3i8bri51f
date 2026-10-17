@@ -114,10 +114,10 @@ export interface AppSettings {
   theme: 'claro' | 'escuro' | 'sistema'
   activeModules: Record<ModuleKey, boolean>
   hasSeenOnboarding: boolean
-  firstTimeWelcomeDismissed?: boolean
+  firstTimeWelcomeDismissed: boolean
   userName: string
+  reminders?: ReminderSettings
 }
-
 // ========================
 // 1) ESCRITA
 // ========================
@@ -465,13 +465,29 @@ export interface ActivityLog {
 
 export interface Medal {
   id: string // UUID
-  code: string // código único da medalha, ex: 'streak_7', 'first_book'
+  code?: string // alias de key para retrocompatibilidade
+  key: string // chave canônica da medalha, ex: 'goal_leitura', 'streak_3_leitura', 'first_book'
   title: string
   description: string
   module?: ModuleKey | 'geral'
+  date?: string // YYYY-MM-DD para medalhas diárias tipo "Meta do dia"
   earnedAt: string // ISO timestamp
   createdAt: string
   updatedAt: string
+}
+
+export interface ReminderModuleConfig {
+  enabled: boolean
+  time: string // 'HH:mm'
+}
+
+export interface ReminderSettings {
+  enabled: boolean // interruptor geral
+  celebrationsEnabled: boolean // se celebrações estão ativas
+  leitura: ReminderModuleConfig
+  treino: ReminderModuleConfig & { relativeToSession?: boolean }
+  escrita: ReminderModuleConfig
+  tasks: boolean // lembretes de tarefas que têm horário e "Lembrar" ligado
 }
 
 // Timer state: SOMENTE LOCAL, sem sincronização nem backup
@@ -485,6 +501,16 @@ export interface TimerState {
   metadata?: Record<string, any>
   createdAt: string
   updatedAt: string
+}
+
+export interface ReadingTimerState {
+  status: 'running' | 'paused' | 'stopped'
+  startedAt?: string
+  elapsedSeconds: number
+  bookId?: string
+  bookTitle?: string
+  targetMinutes?: number
+  pausedAt?: string
 }
 
 // ========================

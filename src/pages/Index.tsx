@@ -17,6 +17,12 @@ import {
 import { useApp } from '@/lib/context'
 import { hojeRepository, FastTodayData } from '@/lib/repositories/hojeRepository'
 import { ProgressRing } from '@/components/ProgressRing'
+import { leituraRepository } from '@/lib/repositories/leituraRepository'
+import { readingTimerService } from '@/lib/readingTimerService'
+import { ReadingTimerModal } from '@/components/ReadingTimerModal'
+import { FloatingReadingTimerChip } from '@/components/FloatingReadingTimerChip'
+import { settingsRepository } from '@/lib/repositories/settingsRepository'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { LocalDataMigrationModal } from '@/components/auth/LocalDataMigrationModal'
@@ -52,17 +58,128 @@ export default function Index() {
   const [quickAchievementOpen, setQuickAchievementOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
 
+  // 5.1 & 5.2: Leitura no Hoje
+  const [readingTimerOpen, setReadingTimerOpen] = useState(false)
+  const [leituraCheckin, setLeituraCheckin] = useState<{ isDone: boolean; isManual: boolean }>({
+    isDone: false,
+    isManual: false,
+  })
+  const [selectBookForTimerOpen, setSelectBookForTimerOpen] = useState(false)
+  const [readingBooksList, setReadingBooksList] = useState<any[]>([])
+
+  // 6.4 Banner de Lembretes pendentes no Hoje
+  const [reminderBanner, setReminderBanner] = useState<{
+    title: string
+    message: string
+    path: string
+  } | null>(null)
+
   const navigate = useNavigate()
   const { toast } = useToast()
 
   const refreshData = useCallback(async () => {
     try {
-      const res = await hojeRepository.getFastTodayData()
+      const [res, chk, rBooks] = await Promise.all([
+        hojeRepository.getFastTodayData(),
+        leituraRepository.getDayCheckinStatus(),
+        leituraRepository.getReadingBooks(),
+      ])
       setData(res)
+      setLeituraCheckin(chk)
+      setReadingBooksList(rBooks)
+
+      // 6.4 Banner de Lembretes pendentes no Hoje
+      try {
+        const s = await settingsRepository.getSettings()
+        const rem = s.reminders
+        if (rem && rem.enabled) {
+          const now = new Date()
+          const currentMins = now.getHours() * 60 + now.getMinutes()
+          const parseTimeMins = (t: string) => {
+            const [h, m] = (t || '').split(':').map(Number)
+            return (h || 0) * 60 + (m || 0)
+          }
+
+          let pendingBanner: { title: string; message: string; path: string } | null = null
+
+          if (
+            rem.leitura.enabled &&
+            !chk.isDone &&
+            currentMins >= parseTimeMins(rem.leitura.time)
+          ) {
+            pendingBanner = {
+              title: 'Lembrete de Leitura 📖',
+              message:
+                'Sua meta diária de leitura ainda está pendente hoje. Reserve um tempo para ler!',
+              path: '/leitura',
+            }
+          } else if (rem.treino.enabled && currentMins >= parseTimeMins(rem.treino.time)) {
+            const trCard = res.goals.treino
+            if (trCard && trCard.hasGoalToday && trCard.progressPercent < 100) {
+              pendingBanner = {
+                title: 'Lembrete de Treino 💪',
+                message: 'Não se esqueça do seu treino planejado para hoje!',
+                path: '/treino',
+              }
+            }
+          } else if (rem.escrita.enabled && currentMins >= parseTimeMins(rem.escrita.time)) {
+            const escCard = res.goals.escrita
+            if (escCard && escCard.hasGoalToday && escCard.progressPercent < 100) {
+              pendingBanner = {
+                title: 'Lembrete de Escrita ✍️',
+                message: 'Como foi seu dia? Registre suas reflexões e pensamentos no diário.',
+                path: '/escrita?focus=1',
+              }
+            }
+          }
+
+          setReminderBanner(pendingBanner)
+        }
+      } catch {
+        /* intentionally ignored */
+      }
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const handleToggleLeituraManual = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const next = !leituraCheckin.isDone
+    await leituraRepository.setManualCheckin(getTodayDateKey(), next)
+    toast({
+      title: next ? 'Leitura concluída! ✓' : 'Check-in desfeito',
+      description: next ? 'Check-in manual registrado.' : 'Progresso recalculado.',
+    })
+    refreshData()
+  }
+
+  const handleStartReadingTimer = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (readingBooksList.length === 0) {
+      navigate('/leitura')
+    } else if (readingBooksList.length === 1) {
+      const b = readingBooksList[0]
+      readingTimerService.startTimer({
+        bookId: b.id,
+        bookTitle: b.title,
+        targetMinutes: b.goal?.dailyMinutes,
+      })
+      setReadingTimerOpen(true)
+    } else {
+      setSelectBookForTimerOpen(true)
+    }
+  }
+
+  const handleChooseBookToRead = (book: any) => {
+    readingTimerService.startTimer({
+      bookId: book.id,
+      bookTitle: book.title,
+      targetMinutes: book.goal?.dailyMinutes,
+    })
+    setSelectBookForTimerOpen(false)
+    setReadingTimerOpen(true)
+  }
 
   useEffect(() => {
     refreshData()
@@ -190,6 +307,35 @@ export default function Index() {
         </div>
       )}
 
+      {/* 6.4 BANNER DE LEMBRETE DO HOJE (QUANDO HORÁRIO PASSOU E META PENDENTE) */}
+      {reminderBanner && (
+        <div className="p-4 rounded-2xl bg-[#E8883A]/10 border border-[#E8883A]/30 flex items-start justify-between gap-3 animate-fade-in">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-[#B4540F] dark:text-[#E8883A]">
+              {reminderBanner.title}
+            </h4>
+            <p className="text-xs text-foreground/80">{reminderBanner.message}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => navigate(reminderBanner.path)}
+              className="h-8 text-xs font-bold rounded-xl bg-[#E8883A] hover:bg-[#E8883A]/90 text-white"
+            >
+              Abrir
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setReminderBanner(null)}
+              className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 2. CABEÇALHO */}
       {/* data por extenso em caixa alta pequena, saudação grande e botão circular de busca (44px) */}
       <header className="flex items-center justify-between gap-4">
@@ -288,16 +434,29 @@ export default function Index() {
                   }
 
                   return (
-                    <button
+                    <div
                       key={card.id}
-                      type="button"
                       onClick={() => navigate(path)}
-                      className="p-3.5 rounded-2xl bg-muted/40 hover:bg-muted/70 border border-border text-left transition-all active:scale-[0.98] group flex flex-col justify-between min-h-[96px]"
+                      className="p-3.5 rounded-2xl bg-muted/40 hover:bg-muted/70 border border-border text-left transition-all active:scale-[0.98] group flex flex-col justify-between min-h-[96px] cursor-pointer"
                     >
                       <div>
-                        <span className="text-xs font-bold block" style={{ color: textColor }}>
-                          {card.name}
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold block" style={{ color: textColor }}>
+                            {card.name}
+                          </span>
+                          {/* 5.1 Estado Pendente / Feito no card Leitura */}
+                          {card.id === 'leitura' && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                leituraCheckin.isDone
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                              }`}
+                            >
+                              {leituraCheckin.isDone ? 'Feito ✓' : 'Pendente'}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-lg font-black text-foreground mt-0.5 tracking-tight">
                           {card.displayValue}
                         </div>
@@ -316,11 +475,34 @@ export default function Index() {
                             />
                           </div>
                         )}
-                        <span className="text-[10px] text-muted-foreground block font-medium">
-                          {card.sublegend || card.legend}
-                        </span>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground block font-medium truncate">
+                            {card.sublegend || card.legend}
+                          </span>
+                        </div>
+
+                        {/* 5.1 & 5.2 Ações rápidas no card de leitura da tela Hoje */}
+                        {card.id === 'leitura' && (
+                          <div className="flex items-center gap-1.5 pt-1 mt-1 border-t border-border/50">
+                            <button
+                              type="button"
+                              onClick={handleStartReadingTimer}
+                              className="text-[10px] font-bold px-2 py-1 rounded-lg bg-[#34BEAA]/15 text-[#1F7F6E] dark:text-[#34BEAA] hover:bg-[#34BEAA]/25 flex items-center gap-1"
+                            >
+                              <Play className="w-2.5 h-2.5 fill-current" /> Iniciar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleToggleLeituraManual}
+                              className="text-[10px] font-bold px-2 py-1 rounded-lg bg-muted text-muted-foreground hover:text-foreground"
+                            >
+                              {leituraCheckin.isDone ? 'Desfazer' : 'Check-in'}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
@@ -479,6 +661,43 @@ export default function Index() {
           )}
         </div>
       </div>
+
+      {/* CHIP FLUTUANTE DE LEITURA (5.2) */}
+      <FloatingReadingTimerChip onClick={() => setReadingTimerOpen(true)} />
+
+      {/* DIÁLOGO DE SELEÇÃO DE LIVRO PARA CRONÔMETRO (SE MAIS DE UM LENDO) */}
+      <Dialog open={selectBookForTimerOpen} onOpenChange={setSelectBookForTimerOpen}>
+        <DialogContent className="sm:max-w-md bg-card rounded-3xl p-6 border border-border shadow-xl">
+          <div className="space-y-3">
+            <h3 className="text-base font-bold text-foreground">Qual livro você vai ler agora?</h3>
+            <div className="space-y-2 pt-1 max-h-60 overflow-y-auto">
+              {readingBooksList.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => handleChooseBookToRead(b)}
+                  className="w-full p-3 rounded-2xl bg-muted/40 hover:bg-muted/80 border border-border flex items-center justify-between text-left transition-colors"
+                >
+                  <div className="truncate pr-2">
+                    <h4 className="text-xs font-bold text-foreground truncate">{b.title}</h4>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {b.author || 'Sem autor'}
+                    </p>
+                  </div>
+                  <Play className="w-4 h-4 text-[#34BEAA] shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DO CRONÔMETRO DE LEITURA */}
+      <ReadingTimerModal
+        open={readingTimerOpen}
+        onClose={() => setReadingTimerOpen(false)}
+        onFinished={refreshData}
+      />
 
       {/* MODAIS / FOLHAS RÁPIDAS */}
       <QuickPagesSheet

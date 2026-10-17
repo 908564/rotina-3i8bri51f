@@ -2,6 +2,15 @@ import { AppSettings } from '../types'
 
 const SETTINGS_KEY = 'rotina_settings'
 
+export const defaultReminderSettings = {
+  enabled: true,
+  celebrationsEnabled: true,
+  leitura: { enabled: true, time: '20:00' },
+  treino: { enabled: true, time: '18:00', relativeToSession: true },
+  escrita: { enabled: true, time: '21:00' },
+  tasks: true,
+}
+
 export const defaultSettings: AppSettings = {
   theme: 'sistema',
   activeModules: {
@@ -14,6 +23,7 @@ export const defaultSettings: AppSettings = {
   hasSeenOnboarding: false,
   firstTimeWelcomeDismissed: false,
   userName: '',
+  reminders: defaultReminderSettings,
 }
 
 export const settingsRepository = {
@@ -28,6 +38,22 @@ export const settingsRepository = {
         activeModules: {
           ...defaultSettings.activeModules,
           ...(parsed.activeModules || {}),
+        },
+        reminders: {
+          ...defaultReminderSettings,
+          ...(parsed.reminders || {}),
+          leitura: {
+            ...defaultReminderSettings.leitura,
+            ...(parsed.reminders?.leitura || {}),
+          },
+          treino: {
+            ...defaultReminderSettings.treino,
+            ...(parsed.reminders?.treino || {}),
+          },
+          escrita: {
+            ...defaultReminderSettings.escrita,
+            ...(parsed.reminders?.escrita || {}),
+          },
         },
       }
     } catch {
