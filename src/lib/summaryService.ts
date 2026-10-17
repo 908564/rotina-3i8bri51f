@@ -245,6 +245,13 @@ export async function getWeekSummary(
   const oldestDateQueried = mondays8[7]
   const newestDateQueried = range.sunday
 
+  // Garante que cada módulo esteja ativo por padrão se não for explicitamente desativado (false)
+  const isTreinoActive = activeModules?.treino !== false
+  const isLeituraActive = activeModules?.leitura !== false
+  const isEscritaActive = activeModules?.escrita !== false
+  const isEstudosActive = activeModules?.estudos !== false
+  const isTrabalhoActive = activeModules?.trabalho !== false
+
   // Consultas paralelas agregadas com índices de data
   const [
     allSummaries,
@@ -258,20 +265,16 @@ export async function getWeekSummary(
     allAchievements,
   ] = await Promise.all([
     idb.getAll<DaySummary>(idb.STORE_DAY_SUMMARIES),
-    activeModules.treino ? idb.getAll<TreinoLog>(idb.STORE_TREINO_LOG) : Promise.resolve([]),
-    activeModules.treino
-      ? idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO)
-      : Promise.resolve([]),
-    activeModules.leitura
+    isTreinoActive ? idb.getAll<TreinoLog>(idb.STORE_TREINO_LOG) : Promise.resolve([]),
+    isTreinoActive ? idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO) : Promise.resolve([]),
+    isLeituraActive
       ? idb.getAll<LeituraHistorico>(idb.STORE_LEITURA_HISTORICO)
       : Promise.resolve([]),
-    activeModules.escrita ? idb.getAll<EscritaNote>(idb.STORE_ESCRITA) : Promise.resolve([]),
-    activeModules.estudos
-      ? idb.getAll<StudySession>(idb.STORE_STUDY_SESSIONS)
-      : Promise.resolve([]),
-    activeModules.estudos ? idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS) : Promise.resolve([]),
-    activeModules.trabalho ? idb.getAll<Project>(idb.STORE_PROJECTS) : Promise.resolve([]),
-    activeModules.trabalho ? idb.getAll<Achievement>(idb.STORE_ACHIEVEMENTS) : Promise.resolve([]),
+    isEscritaActive ? idb.getAll<EscritaNote>(idb.STORE_ESCRITA) : Promise.resolve([]),
+    isEstudosActive ? idb.getAll<StudySession>(idb.STORE_STUDY_SESSIONS) : Promise.resolve([]),
+    isEstudosActive ? idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS) : Promise.resolve([]),
+    isTrabalhoActive ? idb.getAll<Project>(idb.STORE_PROJECTS) : Promise.resolve([]),
+    isTrabalhoActive ? idb.getAll<Achievement>(idb.STORE_ACHIEVEMENTS) : Promise.resolve([]),
   ])
 
   // Busca se há registros em semanas ANTERIORES à selecionada para habilitar/desabilitar botão ‹
@@ -293,7 +296,7 @@ export async function getWeekSummary(
     hasOlderRecords = true
   } else if (
     allProjects.some((p) =>
-      p.tasks.some((t) => t.completedAt && t.completedAt.substring(0, 10) < priorToThisMonday),
+      p.tasks?.some((t) => t.completedAt && t.completedAt.substring(0, 10) < priorToThisMonday),
     )
   ) {
     hasOlderRecords = true
@@ -618,7 +621,7 @@ export async function getWeekSummary(
   // Tarefas com completedAt caindo na semana selecionada
   let weekCompletedTasksCount = 0
   for (const p of allProjects) {
-    for (const t of p.tasks) {
+    for (const t of p.tasks || []) {
       if (t.completed && t.completedAt) {
         const taskDateKey = t.completedAt.substring(0, 10)
         if (taskDateKey >= range.monday && taskDateKey <= range.sunday) {
@@ -686,7 +689,7 @@ export async function getWeekSummary(
   // ==========================================
 
   // Treino
-  const treinoActive = Boolean(activeModules.treino)
+  const treinoActive = isTreinoActive
   const treinoHasRecords = currentWeekTreinoDone > 0 || treinoTotalSeriesWeek > 0
   const maxTreinoDaily = Math.max(...treinoDailyBars.map((b) => b.value), 0)
   const treinoMetrics: ModuleWeekMetrics = {
@@ -704,7 +707,7 @@ export async function getWeekSummary(
   }
 
   // Leitura
-  const leituraActive = Boolean(activeModules.leitura)
+  const leituraActive = isLeituraActive
   const readingOnlyMinutes = currentWeekReadingPages === 0 && currentWeekReadingMinutes > 0
   const leituraHasRecords = currentWeekReadingPages > 0 || currentWeekReadingMinutes > 0
   const maxLeituraDaily = Math.max(...leituraDailyBars.map((b) => b.value), 0)
@@ -735,7 +738,7 @@ export async function getWeekSummary(
   }
 
   // Escrita
-  const escritaActive = Boolean(activeModules.escrita)
+  const escritaActive = isEscritaActive
   const escritaHasRecords = currentWeekWritingDays > 0
   const maxEscritaDaily = Math.max(...escritaDailyBars.map((b) => b.value), 0)
   const escritaDaysWord = pluralWord(escritaElapsedDays, 'dia')
@@ -764,7 +767,7 @@ export async function getWeekSummary(
   }
 
   // Estudos
-  const estudosActive = Boolean(activeModules.estudos)
+  const estudosActive = isEstudosActive
   const estudosHasRecords = currentWeekStudyMinutes > 0
   const maxEstudosDaily = Math.max(...estudosDailyBars.map((b) => b.value), 0)
   const estudosDaysWord = pluralWord(estudosElapsedDays, 'dia')
@@ -793,12 +796,13 @@ export async function getWeekSummary(
   }
 
   // Trabalho
-  const trabalhoActive = Boolean(activeModules.trabalho)
+  const trabalhoActive = isTrabalhoActive
   const trabalhoHasRecords = currentWeekAchievements > 0
   const maxTrabalhoDaily = Math.max(...trabalhoDailyBars.map((b) => b.value), 0)
   const projWord = pluralize(inProgressProjectsCount, 'projeto')
-  const taskWord = pluralize(weekCompletedTasksCount, 'tarefa')
-  const trabalhoLegend = `${projWord} em andamento · ${taskWord} feita(s)`
+  const taskDoneText =
+    weekCompletedTasksCount === 1 ? '1 tarefa feita' : `${weekCompletedTasksCount} tarefas feitas`
+  const trabalhoLegend = `${projWord} em andamento · ${taskDoneText}`
   const trabalhoMetrics: ModuleWeekMetrics = {
     active: trabalhoActive,
     displayValue: trabalhoHasRecords ? `${currentWeekAchievements}` : '—',

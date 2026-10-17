@@ -285,4 +285,17 @@ describe('Nova Tela Resumo - Testes Automatizados de Regras de Negócio', () => 
     expect(summary.highlight?.title).toContain('Você fechou')
     expect(summary.highlight?.title).not.toMatch(/pior|ruim|fracasso|não conseguiu/i)
   })
+
+  // 9. Seção por módulo: fallback seguro quando activeModules possui chaves ausentes/undefined
+  it('9. Seção por módulo permanece ativa mesmo se activeModules vier parcial ou undefined', async () => {
+    const today = getTodayDateKey()
+    const monday = getMondayForDateKey(today)
+
+    const partialSummary = await getWeekSummary(monday, {} as any)
+    expect(partialSummary.modules.treino.active).toBe(true)
+    expect(partialSummary.modules.leitura.active).toBe(true)
+    expect(partialSummary.modules.escrita.active).toBe(true)
+    expect(partialSummary.modules.estudos.active).toBe(true)
+    expect(partialSummary.modules.trabalho.active).toBe(true)
+  })
 })

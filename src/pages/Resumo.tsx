@@ -445,31 +445,35 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ moduleKey, title, icon: Icon, m
       {/* LINHA 2: Valor grande + unidade, e legenda embaixo */}
       <div className="space-y-0.5">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-[28px] sm:text-[30px] font-[800] text-[#1F1B16] dark:text-[#F6F3EE] leading-none tracking-tight">
+          <span className="text-[26px] sm:text-[28px] font-[800] text-[#1F1B16] dark:text-[#F6F3EE] leading-none tracking-tight">
             {metrics.displayValue}
           </span>
           {metrics.unit && (
-            <span className="text-[13px] font-[500] text-[#6B645C] dark:text-[#A8A199]">
+            <span className="text-[13px] font-[600] text-[#4A443D] dark:text-[#BDB4A8]">
               {metrics.unit}
             </span>
           )}
         </div>
-        <p className="text-[12px] font-[400] text-[#6B645C] dark:text-[#A8A199] leading-tight line-clamp-1">
+        <p className="text-[12px] font-[400] text-[#6B645C] dark:text-[#A8A199] leading-snug line-clamp-2 min-h-[32px]">
           {metrics.legend}
         </p>
       </div>
 
       {/* LINHA 3: Minigráfico de 7 barras com iniciais S T Q Q S S D */}
       <div className="pt-1">
-        <div className="flex items-end justify-between gap-1 h-[42px]">
+        <div className="flex items-end justify-between gap-1 h-[46px]">
           {metrics.dailyBars.map((bar) => {
-            let heightPx = 5
             const isZeroOrFuture = bar.isFuture || bar.value === 0
-
-            if (!isZeroOrFuture && metrics.maxDailyValue > 0) {
-              const ratio = bar.value / metrics.maxDailyValue
-              // Barra ativa varia de 8px a 36px
-              heightPx = Math.round(8 + ratio * 28)
+            // Barra inativa / 0: tracinho/pílula arredondada bem sutil (4px)
+            // Barra ativa: mínimo 10px, proporcional até 38px
+            let heightPx = 4
+            if (!isZeroOrFuture) {
+              if (metrics.maxDailyValue > 0) {
+                const ratio = Math.min(1, Math.max(0.15, bar.value / metrics.maxDailyValue))
+                heightPx = Math.round(10 + ratio * 28)
+              } else {
+                heightPx = 14
+              }
             }
 
             return (
@@ -482,13 +486,16 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ moduleKey, title, icon: Icon, m
                 <div
                   style={{
                     height: `${heightPx}px`,
-                    backgroundColor: isZeroOrFuture ? colors.tint : colors.fill,
+                    backgroundColor: isZeroOrFuture ? undefined : colors.fill,
                   }}
-                  className="w-[8px] sm:w-[9px] rounded-full transition-all duration-300 motion-reduce:transition-none"
+                  className={cn(
+                    'w-[9px] sm:w-[10px] rounded-full transition-all duration-300 motion-reduce:transition-none',
+                    isZeroOrFuture && 'bg-[#EAE4DB] dark:bg-[#38332B]',
+                  )}
                 />
                 <span
                   className={cn(
-                    'text-[10px] sm:text-[11px] mt-1 select-none leading-none',
+                    'text-[10px] sm:text-[11px] mt-1.5 select-none leading-none',
                     bar.isToday
                       ? 'font-[800] text-[#1F1B16] dark:text-[#F6F3EE]'
                       : 'font-[400] text-[#9A9187] dark:text-[#80766B]',
@@ -537,7 +544,7 @@ const WorkWideCard: React.FC<{ metrics: ModuleWeekMetrics }> = ({ metrics }) => 
       {/* Lado Direito: "2 conquistas" em cima, pílula de variação "+1" embaixo */}
       <div className="flex flex-col items-end shrink-0 space-y-1">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-[22px] sm:text-[24px] font-[800] text-[#1F1B16] dark:text-[#F6F3EE] leading-none">
+          <span className="text-[20px] sm:text-[22px] font-[800] text-[#1F1B16] dark:text-[#F6F3EE] leading-none">
             {metrics.displayValue}
           </span>
           {metrics.unit && (
