@@ -52,13 +52,23 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { AuthModal } from '@/components/auth/AuthModal'
-import { Cloud, CloudOff, RefreshCw, LogOut, User as UserIcon } from 'lucide-react'
+import {
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  LogOut,
+  User as UserIcon,
+  BarChart2,
+  ChevronRight,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import pb from '@/lib/pocketbase/client'
 
 export default function MaisPage() {
+  const navigate = useNavigate()
   const {
     settings,
     setTheme,
@@ -463,6 +473,32 @@ export default function MaisPage() {
         </div>
         <h1 className="text-xl font-bold tracking-tight text-foreground">Mais</h1>
       </div>
+
+      {/* ENTRADA DIRETA PARA RESUMO DA SEMANA */}
+      <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">
+        <CardContent className="p-3 sm:p-4">
+          <button
+            type="button"
+            onClick={() => navigate('/resumo')}
+            className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-muted/50 transition-colors text-left group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#E8883A]/15 text-[#E8883A] flex items-center justify-center shrink-0">
+                <BarChart2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-foreground group-hover:text-[#E8883A] transition-colors">
+                  Resumo da semana
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Visão consolidada de hábitos, progresso dos 7 dias e histórico semanal
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </CardContent>
+      </Card>
 
       {/* SEÇÃO CONTA & SINCRONIZAÇÃO NA NUVEM */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">

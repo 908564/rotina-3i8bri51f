@@ -11,13 +11,17 @@ import {
   Target,
   Sparkles,
 } from 'lucide-react'
-import { Livro, LivroAnotacao, LeituraHistorico, LivroMeta } from '@/lib/types'
+import { useNavigate } from 'react-router-dom'
+import { Livro, LivroAnotacao, LeituraHistorico, LivroMeta, Task } from '@/lib/types'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
+import { taskRepository } from '@/lib/repositories/taskRepository'
+import { openTaskModal } from '@/lib/taskModalEvents'
 import { getTodayDateKey, getDaysAgoKey } from '@/lib/dateUtils'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
+import { ListTodo } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -54,9 +58,11 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
   const [anotacoes, setAnotacoes] = useState<LivroAnotacao[]>([])
   const [historico, setHistorico] = useState<LeituraHistorico[]>([])
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const navigate = useNavigate()
   const [goalModalOpen, setGoalModalOpen] = useState(false)
   const [noteModalOpen, setNoteModalOpen] = useState(false)
   const [deleteBookDialogOpen, setDeleteBookDialogOpen] = useState(false)
+  const [bookTasks, setBookTasks] = useState<Task[]>([])
 
   // Estado para anotação em edição/criação
   const [editingNote, setEditingNote] = useState<LivroAnotacao | null>(null)
@@ -445,6 +451,95 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* SEÇÃO: TAREFAS DESTE LIVRO */}
+      {(() => {
+        const pendingTasks = bookTasks.filter((t) => t.status === 'open')
+        const displayedTasks = bookTasks.slice(0, 3)
+
+        return (
+          <div className="space-y-3 p-4 rounded-2xl bg-card border border-border shadow-subtle">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ListTodo className="w-4 h-4 text-[#1F7F6E]" />
+                <h3 className="text-base font-bold text-foreground">Tarefas deste livro</h3>
+                {pendingTasks.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D6EEE9] text-[#1F7F6E]">
+                    {pendingTasks.length} pendente{pendingTasks.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('rotina_tarefas_module_filter', 'leitura')
+                  navigate('/tarefas')
+                }}
+                className="text-xs font-semibold text-[#1F7F6E] hover:underline"
+              >
+                Ver todas
+              </button>
+            </div>
+
+            {displayedTasks.length > 0 ? (
+              <div className="space-y-2">
+                {displayedTasks.map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => openTaskModal({ taskId: t.id })}
+                    className="p-2.5 rounded-xl border border-border/70 flex items-center justify-between gap-2 hover:bg-muted/30 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          await taskRepository.toggleTaskStatus(t.id)
+                          loadData()
+                        }}
+                        className="w-5 h-5 rounded-full border-2 border-[#1F7F6E] flex items-center justify-center shrink-0"
+                      >
+                        {t.status === 'done' && <Check className="w-3 h-3 text-[#1F7F6E]" />}
+                      </button>
+                      <span
+                        className={`text-xs font-medium truncate ${
+                          t.status === 'done'
+                            ? 'line-through text-muted-foreground'
+                            : 'text-foreground'
+                        }`}
+                      >
+                        {t.title}
+                      </span>
+                    </div>
+                    {t.dueDate && (
+                      <span className="text-[10px] text-muted-foreground shrink-0 font-medium">
+                        {t.dueDate}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Nenhuma tarefa vinculada a este livro.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                openTaskModal({
+                  module: 'leitura',
+                  link: { type: 'book', id: book.id },
+                })
+              }
+              className="w-full h-10 rounded-xl border border-dashed border-[#1F7F6E]/40 hover:border-[#1F7F6E] text-xs font-bold text-[#1F7F6E] flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Tarefa para este livro
+            </button>
+          </div>
+        )
+      })()}
 
       {/* SEÇÃO: ANOTAÇÕES DO LIVRO */}
       <div className="space-y-3">

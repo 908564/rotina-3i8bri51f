@@ -4,6 +4,37 @@
  */
 
 export type ModuleKey = 'escrita' | 'leitura' | 'treino' | 'estudos' | 'trabalho'
+export type TaskModule = 'escrita' | 'leitura' | 'treino' | 'estudos' | 'trabalho' | 'geral'
+export type TaskPriority = 'low' | 'normal' | 'high'
+export type TaskStatus = 'open' | 'done'
+
+export interface TaskLink {
+  type: 'book' | 'course' | 'project' | 'workoutDay'
+  id: string
+}
+
+export interface TaskSubtask {
+  id: string
+  title: string
+  done: boolean
+}
+
+export interface Task {
+  id: string
+  title: string // 1-140 caracteres
+  module: TaskModule
+  link: TaskLink | null
+  dueDate: string | null // AAAA-MM-DD
+  dueTime: string | null // HH:mm
+  reminder: boolean
+  priority: TaskPriority
+  status: TaskStatus
+  completedAt: string | null // timestamp ISO
+  subtasks: TaskSubtask[] // máx 20
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
 
 export interface AppSettings {
   theme: 'claro' | 'escuro' | 'sistema'
@@ -402,6 +433,7 @@ export type SyncEntity =
   | 'workNote'
   | 'daySummary'
   | 'settings'
+  | 'task'
 
 export type SyncOperation = 'upsert' | 'delete'
 

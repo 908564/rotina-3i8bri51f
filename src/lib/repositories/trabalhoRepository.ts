@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { recordOutboxInTx } from '../sync/outboxHelper'
+import { taskRepository } from './taskRepository'
 import {
   Project,
   Achievement,
@@ -91,6 +92,9 @@ export const trabalhoRepository = {
         }
       },
     )
+
+    // Regra de integridade: desvincular tarefas deste projeto sem apagá-las
+    await taskRepository.unlinkByEntity('project', id)
   },
 
   async toggleTask(projectId: string, taskId: string): Promise<Project | undefined> {

@@ -13,11 +13,11 @@ import {
   BookOpen,
   Dumbbell,
   GraduationCap,
-  Trophy,
   Briefcase,
+  Trophy,
+  CheckSquare,
   ChevronRight,
 } from 'lucide-react'
-
 interface NewEntryModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -25,6 +25,7 @@ interface NewEntryModalProps {
   onOpenQuickStudy: () => void
   onOpenQuickWorkout: () => void
   onOpenQuickAchievement: () => void
+  onOpenNewTask?: () => void
 }
 
 export const NewEntryModal: React.FC<NewEntryModalProps> = ({
@@ -34,12 +35,26 @@ export const NewEntryModal: React.FC<NewEntryModalProps> = ({
   onOpenQuickStudy,
   onOpenQuickWorkout,
   onOpenQuickAchievement,
+  onOpenNewTask,
 }) => {
   const { settings } = useApp()
   const navigate = useNavigate()
   const active = settings.activeModules
 
   const items = [
+    {
+      id: 'nova_tarefa',
+      active: true,
+      label: 'Nova tarefa',
+      subtitle: 'Para hoje, semana ou sem data',
+      icon: CheckSquare,
+      color: '#E8883A',
+      bg: '#FDF4EC',
+      action: () => {
+        onOpenChange(false)
+        onOpenNewTask?.()
+      },
+    },
     {
       id: 'escrita',
       active: active.escrita,

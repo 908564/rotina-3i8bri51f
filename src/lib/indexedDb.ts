@@ -28,6 +28,7 @@ const STORE_ACHIEVEMENTS = 'achievements'
 const STORE_EXPERIENCES = 'experiences'
 const STORE_WORK_NOTES = 'work_notes'
 const STORE_DAY_SUMMARIES = 'day_summaries'
+const STORE_TASKS = 'tasks'
 const STORE_SYNC_OUTBOX = 'sync_outbox'
 const STORE_SYNC_META = 'sync_meta'
 
@@ -134,6 +135,54 @@ function getDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains(STORE_SYNC_META)) {
         db.createObjectStore(STORE_SYNC_META, { keyPath: 'key' })
+      }
+
+      // v6: TAREFAS (tasks)
+      let taskStore: IDBObjectStore
+      if (!db.objectStoreNames.contains(STORE_TASKS)) {
+        taskStore = db.createObjectStore(STORE_TASKS, { keyPath: 'id' })
+        taskStore.createIndex('dueDate', 'dueDate', { unique: false })
+        taskStore.createIndex('module', 'module', { unique: false })
+        taskStore.createIndex('status', 'status', { unique: false })
+        taskStore.createIndex('link.id', 'link.id', { unique: false })
+        taskStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+      } else {
+        taskStore = (event.target as IDBOpenDBRequest).transaction!.objectStore(STORE_TASKS)
+      }
+
+      // Migração automática de ProjectTask -> Task no upgrade de versão
+      if (db.objectStoreNames.contains(STORE_PROJECTS)) {
+        const tx = (event.target as IDBOpenDBRequest).transaction!
+        const projStore = tx.objectStore(STORE_PROJECTS)
+        const getProjectsReq = projStore.getAll()
+        getProjectsReq.onsuccess = () => {
+          const projects = getProjectsReq.result || []
+          for (const p of projects) {
+            if (Array.isArray(p.tasks) && p.tasks.length > 0) {
+              for (const pt of p.tasks) {
+                const taskId = pt.id || crypto.randomUUID()
+                const nowIso = new Date().toISOString()
+                const taskObj = {
+                  id: taskId,
+                  title: pt.title ? pt.title.substring(0, 140) : 'Tarefa de projeto',
+                  module: 'trabalho',
+                  link: { type: 'project', id: p.id },
+                  dueDate: null,
+                  dueTime: null,
+                  reminder: false,
+                  priority: 'normal',
+                  status: pt.completed ? 'done' : 'open',
+                  completedAt: pt.completed ? pt.completedAt || p.updated || nowIso : null,
+                  subtasks: [],
+                  createdAt: p.created || nowIso,
+                  updatedAt: p.updated || nowIso,
+                  deletedAt: null,
+                }
+                taskStore.put(taskObj)
+              }
+            }
+          }
+        }
       }
     }
 
@@ -420,6 +469,7 @@ export const idb = {
   STORE_EXPERIENCES,
   STORE_WORK_NOTES,
   STORE_DAY_SUMMARIES,
+  STORE_TASKS,
   STORE_SYNC_OUTBOX,
   STORE_SYNC_META,
   getAll: getAllFromStore,

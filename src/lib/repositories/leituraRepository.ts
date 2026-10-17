@@ -1,6 +1,7 @@
 import { idb } from '../indexedDb'
 import { getTodayDateKey, getDaysAgoKey, subDaysFromDateKey } from '../dateUtils'
 import { recordOutboxInTx } from '../sync/outboxHelper'
+import { taskRepository } from './taskRepository'
 import {
   Livro,
   LivroMeta,
@@ -191,6 +192,9 @@ export const leituraRepository = {
         }
       },
     )
+
+    // Regra de integridade: desvincular tarefas deste livro sem apagá-las
+    await taskRepository.unlinkByEntity('book', id)
   },
 
   // Anotações

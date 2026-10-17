@@ -11,15 +11,26 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/lib/context'
 import { hojeRepository, FastTodayData } from '@/lib/repositories/hojeRepository'
+import { taskRepository } from '@/lib/repositories/taskRepository'
 import { Button } from '@/components/ui/button'
 
 export const ModulosPage: React.FC = () => {
   const { settings } = useApp()
   const [data, setData] = useState<FastTodayData | null>(null)
+  const [pendingTasksByModule, setPendingTasksByModule] = useState<Record<string, number>>({})
   const navigate = useNavigate()
 
   useEffect(() => {
     hojeRepository.getFastTodayData().then(setData)
+    taskRepository.getTasks().then((tasks) => {
+      const counts: Record<string, number> = {}
+      for (const t of tasks) {
+        if (t.status === 'open') {
+          counts[t.module] = (counts[t.module] || 0) + 1
+        }
+      }
+      setPendingTasksByModule(counts)
+    })
   }, [])
 
   const active = settings.activeModules
@@ -133,10 +144,15 @@ export const ModulosPage: React.FC = () => {
                   {m.name}
                 </h3>
                 <p className="text-xs text-muted-foreground line-clamp-1">{m.description}</p>
-                <div className="pt-1.5">
+                <div className="pt-1.5 flex flex-wrap items-center gap-1.5">
                   <span className="inline-block text-[11px] font-semibold text-foreground/80 bg-muted/60 px-2 py-0.5 rounded-md">
                     {m.statusText}
                   </span>
+                  {pendingTasksByModule[m.id] > 0 && (
+                    <span className="inline-block text-[11px] font-bold text-[#8A5A00] bg-[#FBEBD3] px-2 py-0.5 rounded-md">
+                      {pendingTasksByModule[m.id]} tarefa{pendingTasksByModule[m.id] > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
               </div>
             </button>

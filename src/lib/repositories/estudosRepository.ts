@@ -1,6 +1,7 @@
 import { idb } from '../indexedDb'
 import { getTodayDateKey, getDaysAgoKey } from '../dateUtils'
 import { recordOutboxInTx } from '../sync/outboxHelper'
+import { taskRepository } from './taskRepository'
 import {
   Course,
   StudyPage,
@@ -110,6 +111,9 @@ export const estudosRepository = {
     if (lastPage && lastPage.courseId === id) {
       localStorage.removeItem(LAST_OPENED_PAGE_KEY)
     }
+
+    // Regra de integridade: desvincular tarefas deste curso sem apagá-las
+    await taskRepository.unlinkByEntity('course', id)
   },
 
   // ========================

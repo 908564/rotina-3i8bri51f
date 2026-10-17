@@ -18,10 +18,10 @@
 
 import packageJson from '../../package.json'
 
-export const APP_VERSION = '0.1.1'
+export const APP_VERSION = '0.2.0'
 
 /** Versão estrutural do IndexedDB (rotina_db) */
-export const DB_VERSION = 5
+export const DB_VERSION = 6
 
 /** Versão do formato de exportação de backup JSON */
-export const BACKUP_SCHEMA_VERSION = 5
+export const BACKUP_SCHEMA_VERSION = 6

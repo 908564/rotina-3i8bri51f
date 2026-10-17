@@ -13,7 +13,9 @@ import {
   Loader2,
 } from 'lucide-react'
 import { Project, ProjectStatus, Experience } from '@/lib/types'
+import { taskRepository } from '@/lib/repositories/taskRepository'
 import { trabalhoRepository } from '@/lib/repositories/trabalhoRepository'
+import { Task } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -43,6 +45,16 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const { toast } = useToast()
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [addingTask, setAddingTask] = useState(false)
+  const [projectTasks, setProjectTasks] = useState<Task[]>([])
+
+  const loadTasks = React.useCallback(async () => {
+    const list = await taskRepository.getTasksByLink('project', project.id)
+    setProjectTasks(list)
+  }, [project.id])
+
+  React.useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
 
   // Anotações
   const [noteDate, setNoteDate] = useState(getTodayDateKey())
@@ -61,7 +73,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   }
 
   const handleToggleTask = async (taskId: string) => {
-    await trabalhoRepository.toggleTask(project.id, taskId)
+    await taskRepository.toggleTaskStatus(taskId)
+    await loadTasks()
     onProjectUpdated()
   }
 
@@ -70,14 +83,22 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (!newTaskTitle.trim()) return
 
     setAddingTask(true)
-    await trabalhoRepository.addTask(project.id, newTaskTitle.trim())
+    await taskRepository.saveTask({
+      title: newTaskTitle.trim(),
+      module: 'trabalho',
+      link: { type: 'project', id: project.id },
+      priority: 'normal',
+      status: 'open',
+    })
     setNewTaskTitle('')
     setAddingTask(false)
+    await loadTasks()
     onProjectUpdated()
   }
 
   const handleDeleteTask = async (taskId: string) => {
-    await trabalhoRepository.deleteTask(project.id, taskId)
+    await taskRepository.deleteTask(taskId)
+    await loadTasks()
     onProjectUpdated()
   }
 
@@ -125,8 +146,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     onProjectUpdated()
   }
 
-  const completedTasksCount = project.tasks.filter((t) => t.completed).length
-  const totalTasksCount = project.tasks.length
+  const completedTasksCount = projectTasks.filter((t) => t.status === 'done').length
+  const totalTasksCount = projectTasks.length
   const progressPercent =
     totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0
 
@@ -264,53 +285,56 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </form>
 
           {/* Lista de tarefas */}
-          {project.tasks.length === 0 ? (
+          {projectTasks.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4 border border-dashed border-border rounded-xl">
               Nenhuma tarefa pendente. Adicione itens para acompanhar seu progresso.
             </p>
           ) : (
             <div className="space-y-2">
-              {project.tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={cn(
-                    'flex items-center justify-between p-3 rounded-xl border transition-all',
-                    task.completed
-                      ? 'bg-muted/40 border-border/60 text-muted-foreground'
-                      : 'bg-background border-border text-foreground hover:border-[#0284C7]/50',
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleTask(task.id)}
-                    className="flex items-center gap-3 text-left flex-1 min-h-[44px] py-1 cursor-pointer select-none"
-                    aria-label={task.completed ? 'Desmarcar tarefa' : 'Marcar tarefa'}
-                  >
-                    {task.completed ? (
-                      <CheckCircle2 className="w-5 h-5 text-[#3D9C73] shrink-0" />
-                    ) : (
-                      <Circle className="w-5 h-5 text-muted-foreground shrink-0" />
+              {projectTasks.map((task) => {
+                const isDone = task.status === 'done'
+                return (
+                  <div
+                    key={task.id}
+                    className={cn(
+                      'flex items-center justify-between p-3 rounded-xl border transition-all',
+                      isDone
+                        ? 'bg-muted/40 border-border/60 text-muted-foreground'
+                        : 'bg-background border-border text-foreground hover:border-[#0284C7]/50',
                     )}
-                    <span
-                      className={cn(
-                        'text-xs sm:text-sm font-medium',
-                        task.completed && 'line-through text-muted-foreground',
-                      )}
-                    >
-                      {task.title}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteTask(task.id)}
-                    className="min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                    aria-label="Excluir tarefa"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTask(task.id)}
+                      className="flex items-center gap-3 text-left flex-1 min-h-[44px] py-1 cursor-pointer select-none"
+                      aria-label={isDone ? 'Desmarcar tarefa' : 'Marcar tarefa'}
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="w-5 h-5 text-[#3D9C73] shrink-0" />
+                      ) : (
+                        <Circle className="w-5 h-5 text-muted-foreground shrink-0" />
+                      )}
+                      <span
+                        className={cn(
+                          'text-xs sm:text-sm font-medium',
+                          isDone && 'line-through text-muted-foreground',
+                        )}
+                      >
+                        {task.title}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                      aria-label="Excluir tarefa"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </CardContent>

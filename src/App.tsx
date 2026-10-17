@@ -4,9 +4,11 @@ import { AuthProvider } from '@/lib/auth/AuthContext'
 import { Toaster } from '@/components/ui/toaster'
 import Layout from '@/components/Layout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { TaskModal } from '@/components/TaskModal'
 
 import Index from '@/pages/Index'
 import ModulosPage from '@/pages/Modulos'
+import TarefasPage from '@/pages/Tarefas'
 import EscritaPage from '@/pages/Escrita'
 import LeituraPage from '@/pages/Leitura'
 import TreinoPage from '@/pages/Treino'
@@ -26,6 +28,7 @@ export function App() {
       <AuthProvider>
         <AppProvider>
           <BrowserRouter>
+            <TaskModal />
             <Routes>
               {/* Páginas autônomas */}
               <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
@@ -35,6 +38,7 @@ export function App() {
 
               <Route path="/" element={<Layout />}>
                 <Route index element={<Index />} />
+                <Route path="tarefas" element={<TarefasPage />} />
                 <Route path="modulos" element={<ModulosPage />} />
                 <Route path="escrita" element={<EscritaPage />} />
                 <Route path="leitura" element={<LeituraPage />} />

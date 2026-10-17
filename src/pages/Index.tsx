@@ -228,13 +228,22 @@ export default function Index() {
                 strokeWidth={10}
               />
 
-              {/* Ao lado do anel: pílula de sequência, título e frase de apoio */}
+              {/* Ao lado do anel: pílula de sequência, título, frase de apoio e link Ver resumo */}
               <div className="space-y-1.5 flex-1 min-w-0">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E8883A]/10 border border-[#E8883A]/20 text-[#E8883A] text-xs font-bold">
-                  <Flame className="w-3.5 h-3.5 fill-[#E8883A]" />
-                  <span>
-                    {data?.streak || 0} {data?.streak === 1 ? 'dia seguido' : 'dias seguidos'}
-                  </span>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E8883A]/10 border border-[#E8883A]/20 text-[#E8883A] text-xs font-bold">
+                    <Flame className="w-3.5 h-3.5 fill-[#E8883A]" />
+                    <span>
+                      {data?.streak || 0} {data?.streak === 1 ? 'dia seguido' : 'dias seguidos'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/resumo')}
+                    className="text-[11px] font-semibold text-[#B4540F] dark:text-[#E8883A] hover:underline"
+                  >
+                    Ver resumo da semana
+                  </button>
                 </div>
 
                 <h3 className="text-base sm:text-lg font-bold text-foreground leading-snug">
