@@ -1,5 +1,5 @@
-import { idb } from '../indexedDb'
-import { TimerState, ReadingTimerState } from '../types'
+import { idb } from './indexedDb'
+import { TimerState, ReadingTimerState } from './types'
 
 const READING_TIMER_ID = 'reading_active'
 
@@ -112,10 +112,10 @@ export const readingTimerService = {
     pagesRead?: number
     date?: string
   }): Promise<void> {
-    const { leituraRepository } = await import('./leituraRepository')
-    const { moduleDaysRepository } = await import('./moduleDaysRepository')
-    const { medalsRepository } = await import('./medalsRepository')
-    const { getTodayDateKey } = await import('../dateUtils')
+    const { leituraRepository } = await import('./repositories/leituraRepository')
+    const { moduleDaysRepository } = await import('./repositories/moduleDaysRepository')
+    const { medalsRepository } = await import('./repositories/medalsRepository')
+    const { getTodayDateKey } = await import('./dateUtils')
 
     const dateStr = params.date || getTodayDateKey()
     const livro = await leituraRepository.getLivroById(params.bookId)

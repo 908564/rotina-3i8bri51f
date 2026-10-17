@@ -853,8 +853,25 @@ function sanitizeSettings(item: any): AppSettings | undefined {
     trabalho: Boolean(item.activeModules?.trabalho ?? true),
   }
 
+  const defaultRem = {
+    enabled: true,
+    celebrationsEnabled: true,
+    leitura: { enabled: true, time: '20:00' },
+    treino: { enabled: true, time: '18:00', relativeToSession: true },
+    escrita: { enabled: true, time: '21:00' },
+    tasks: true,
+  }
+
   const reminders =
-    item.reminders && typeof item.reminders === 'object' ? item.reminders : undefined
+    item.reminders && typeof item.reminders === 'object'
+      ? {
+          ...defaultRem,
+          ...item.reminders,
+          leitura: { ...defaultRem.leitura, ...(item.reminders.leitura || {}) },
+          treino: { ...defaultRem.treino, ...(item.reminders.treino || {}) },
+          escrita: { ...defaultRem.escrita, ...(item.reminders.escrita || {}) },
+        }
+      : undefined
 
   return {
     theme: validThemes,

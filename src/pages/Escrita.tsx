@@ -291,6 +291,9 @@ export default function EscritaPage() {
   }
 
   const isToday = currentDate === getTodayDateStr()
+  const todayDateStr = getTodayDateStr()
+  const hasTodayNote =
+    allNotesDates.has(todayDateStr) || (isToday && (Boolean(title.trim()) || Boolean(body.trim())))
 
   return (
     <div className="pt-2 pb-8 max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
@@ -299,9 +302,9 @@ export default function EscritaPage() {
         {/* OFENSIVA POR MÓDULO (PARTE 6.1) */}
         <ModuleStreakCard
           module="escrita"
-          isGoalPending={!hasCurrentNote}
+          isGoalPending={!hasTodayNote}
           todayStatusText={
-            hasCurrentNote
+            hasTodayNote
               ? 'Anotação de hoje registrada! Continue cultivando suas ideias.'
               : 'Escreva suas reflexões de hoje para manter sua ofensiva.'
           }

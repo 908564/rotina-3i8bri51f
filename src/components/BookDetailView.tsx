@@ -111,7 +111,7 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
     try {
       const today = getTodayDateKey()
       if (celebrationService.hasCelebratedToday('leitura', today)) return
-      const s = await settingsRepository.getSettings()
+      const s = settingsRepository.getSettings()
       if (s.reminders && s.reminders.celebrationsEnabled === false) return
 
       const { moduleDaysRepository } = await import('@/lib/repositories/moduleDaysRepository')

@@ -323,7 +323,7 @@ export const medalsRepository = {
     // 3. Primeiro livro concluído (se módulo for leitura)
     if (module === 'leitura') {
       const books = await idb.getAll<any>(idb.STORE_LIVROS)
-      const hasCompletedBook = books.some((b) => b.status === 'lido')
+      const hasCompletedBook = books.some((b) => b.status === 'concluido' || b.status === 'lido')
       if (hasCompletedBook) {
         const res = await this.grantMedal({
           key: 'first_book_completed',

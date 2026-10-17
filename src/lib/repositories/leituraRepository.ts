@@ -366,6 +366,11 @@ export const leituraRepository = {
    * Grava em module_days com source = manual.
    * Concede a medalha do dia e dispara avaliação de medalhas.
    */
+  async getReadingBooks(): Promise<Livro[]> {
+    const books = await this.getLivros()
+    return books.filter((b) => b.status === 'lendo')
+  },
+
   async setManualCheckin(date: string = getTodayDateKey(), done: boolean = true): Promise<void> {
     const { moduleDaysRepository } = await import('./moduleDaysRepository')
     const { medalsRepository } = await import('./medalsRepository')

@@ -1,5 +1,6 @@
 import { idb } from '../indexedDb'
 import { ModuleDay, ModuleDayKey, ModuleDaySource, DaySummary } from '../types'
+export type { ModuleDayKey } from '../types'
 import { recordOutboxInTx } from '../sync/outboxHelper'
 import { subDaysFromDateKey, getTodayDateKey } from '../dateUtils'
 

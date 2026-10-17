@@ -18,7 +18,7 @@
 
 import packageJson from '../../package.json'
 
-export const APP_VERSION = '0.0.24'
+export const APP_VERSION = '0.0.26'
 
 /** Versão estrutural do IndexedDB (rotina_db) */
 export const DB_VERSION = 7

@@ -18,6 +18,7 @@ import { useApp } from '@/lib/context'
 import { hojeRepository, FastTodayData } from '@/lib/repositories/hojeRepository'
 import { ProgressRing } from '@/components/ProgressRing'
 import { leituraRepository } from '@/lib/repositories/leituraRepository'
+import { getTodayDateKey } from '@/lib/dateUtils'
 import { readingTimerService } from '@/lib/readingTimerService'
 import { ReadingTimerModal } from '@/components/ReadingTimerModal'
 import { FloatingReadingTimerChip } from '@/components/FloatingReadingTimerChip'
@@ -90,7 +91,7 @@ export default function Index() {
 
       // 6.4 Banner de Lembretes pendentes no Hoje
       try {
-        const s = await settingsRepository.getSettings()
+        const s = settingsRepository.getSettings()
         const rem = s.reminders
         if (rem && rem.enabled) {
           const now = new Date()

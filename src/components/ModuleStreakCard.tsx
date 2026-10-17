@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Flame, Check, Minus, Circle, AlertTriangle } from 'lucide-react'
-import { moduleDaysRepository, ModuleDayKey } from '@/lib/repositories/moduleDaysRepository'
+import { moduleDaysRepository } from '@/lib/repositories/moduleDaysRepository'
+import { ModuleDayKey } from '@/lib/types'
 import {
   getTodayDateKey,
   subDaysFromDateKey,

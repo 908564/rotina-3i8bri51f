@@ -32,11 +32,10 @@ export function LembretesCelebracoesView({ onBack }: LembretesCelebracoesViewPro
   })
 
   useEffect(() => {
-    settingsRepository.getSettings().then((s) => {
-      if (s.reminders) {
-        setSettings(s.reminders)
-      }
-    })
+    const s = settingsRepository.getSettings()
+    if (s.reminders) {
+      setSettings(s.reminders)
+    }
   }, [])
 
   const saveReminders = async (newReminders: ReminderSettings) => {
