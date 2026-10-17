@@ -19,7 +19,18 @@ export interface AuthContextType {
     email: string,
     password: string,
     name?: string,
-  ) => Promise<{ error: any; inviteRequired?: boolean }>
+  ) => Promise<{
+    error: any
+    errorCode?:
+      | 'invite_required'
+      | 'email_exists'
+      | 'weak_password'
+      | 'rate_limit'
+      | 'network_error'
+      | 'other'
+    fieldErrors?: Record<string, string>
+    verificationSent?: boolean
+  }>
   signOut: (options?: { keepLocalData?: boolean }) => Promise<void>
   requestPasswordReset: (email: string) => Promise<{ error: any }>
   confirmPasswordReset: (token: string, password: string) => Promise<{ error: any }>
@@ -117,7 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
-      const authData = await pb.collection('users').authWithPassword(email.trim(), password)
+      const normalizedEmail = email.trim().toLowerCase()
+      const authData = await pb.collection('users').authWithPassword(normalizedEmail, password)
       const r = authData.record
       const nextUser: UserProfile = {
         id: r.id,
@@ -135,33 +147,163 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const signUp = async (email: string, password: string, name = '') => {
+  const signUp = async (
+    email: string,
+    password: string,
+    name = '',
+  ): Promise<{
+    error: any
+    errorCode?:
+      | 'invite_required'
+      | 'email_exists'
+      | 'weak_password'
+      | 'rate_limit'
+      | 'network_error'
+      | 'other'
+    fieldErrors?: Record<string, string>
+    verificationSent?: boolean
+  }> => {
+    const normalizedEmail = email.trim().toLowerCase()
+    let verificationSent = false
+
     try {
-      const trimmedEmail = email.trim()
-      // Cria usuário
+      // 1. Cria usuário
       await pb.collection('users').create({
-        email: trimmedEmail,
+        email: normalizedEmail,
         password,
         passwordConfirm: password,
         name: name.trim(),
       })
 
-      // Tenta enviar e-mail de verificação (best effort)
+      // 2. Dispara e-mail de verificação (propagando sucesso/falha sem perder a conta criada)
       try {
-        await pb.collection('users').requestVerification(trimmedEmail)
+        await pb.collection('users').requestVerification(normalizedEmail)
+        verificationSent = true
       } catch {
-        /* intentionally ignored */
+        verificationSent = false
       }
 
-      // Realiza login
-      await pb.collection('users').authWithPassword(trimmedEmail, password)
-      return { error: null }
+      // 3. Realiza login
+      try {
+        const authData = await pb.collection('users').authWithPassword(normalizedEmail, password)
+        const r = authData.record
+        setUser({
+          id: r.id,
+          email: r.email,
+          name: r.name || '',
+          verified: Boolean(r.verified),
+        })
+      } catch {
+        /* se login automático falhar, a conta continua criada */
+      }
+
+      return { error: null, verificationSent }
     } catch (error: any) {
-      // Se a falha for pela regra de convite
+      // Classificação precisa do erro do PocketBase
+      const status = error?.status || 0
+      const data = error?.response?.data || error?.data || {}
       const msg = error?.message || ''
-      const isInviteRejection =
-        error?.status === 400 || error?.status === 403 || /invite/i.test(msg) || /rule/i.test(msg)
-      return { error, inviteRequired: isInviteRejection }
+      const rawData = JSON.stringify(data)
+
+      const fieldErrors: Record<string, string> = {}
+      if (typeof data === 'object' && data !== null) {
+        for (const [key, val] of Object.entries(data)) {
+          if (val && typeof val === 'object' && 'message' in val) {
+            fieldErrors[key] = String((val as any).message)
+          } else if (typeof val === 'string') {
+            fieldErrors[key] = val
+          }
+        }
+      }
+
+      // 1. invite_required (403 ou código de convite)
+      const isInvite =
+        status === 403 ||
+        data?.invite?.code === 'invite_required' ||
+        /invite/i.test(rawData) ||
+        /convidado/i.test(msg) ||
+        /invite_required/i.test(msg)
+
+      if (isInvite) {
+        return {
+          error,
+          errorCode: 'invite_required',
+          fieldErrors: {
+            email: 'Cadastro disponível apenas para convidados no momento.',
+            ...fieldErrors,
+          },
+          verificationSent: false,
+        }
+      }
+
+      // 2. Limite de requisições (429)
+      if (status === 429 || /too many/i.test(msg)) {
+        return {
+          error,
+          errorCode: 'rate_limit',
+          fieldErrors,
+          verificationSent: false,
+        }
+      }
+
+      // 3. Sem conexão (rede / offline)
+      if (
+        status === 0 ||
+        error?.name === 'TypeError' ||
+        /network|failed to fetch|offline|connection/i.test(msg)
+      ) {
+        return {
+          error,
+          errorCode: 'network_error',
+          fieldErrors,
+          verificationSent: false,
+        }
+      }
+
+      // 4. E-mail já cadastrado
+      const emailFieldMsg = data?.email?.message || ''
+      const emailFieldCode = data?.email?.code || ''
+      if (
+        emailFieldCode === 'validation_not_unique' ||
+        /already|unique|existe|cadastrado|taken/i.test(emailFieldMsg) ||
+        /already|unique|existe/i.test(msg)
+      ) {
+        return {
+          error,
+          errorCode: 'email_exists',
+          fieldErrors: {
+            email: 'Este e-mail já tem conta. Entre ou recupere a senha.',
+            ...fieldErrors,
+          },
+          verificationSent: false,
+        }
+      }
+
+      // 5. Senha fraca / curta / comum
+      const passFieldMsg = data?.password?.message || ''
+      const passFieldCode = data?.password?.code || ''
+      if (
+        passFieldCode.includes('min') ||
+        passFieldCode.includes('length') ||
+        /min|10|tamanho|curta/i.test(passFieldMsg)
+      ) {
+        return {
+          error,
+          errorCode: 'weak_password',
+          fieldErrors: {
+            password: 'A senha deve conter no mínimo 10 caracteres.',
+            ...fieldErrors,
+          },
+          verificationSent: false,
+        }
+      }
+
+      return {
+        error,
+        errorCode: 'other',
+        fieldErrors,
+        verificationSent: false,
+      }
     }
   }
 
@@ -175,7 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestPasswordReset = async (email: string) => {
     try {
-      await pb.collection('users').requestPasswordReset(email.trim())
+      await pb.collection('users').requestPasswordReset(email.trim().toLowerCase())
       return { error: null }
     } catch (error: any) {
       return { error }
@@ -193,7 +335,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestVerification = async (email: string) => {
     try {
-      await pb.collection('users').requestVerification(email.trim())
+      await pb.collection('users').requestVerification(email.trim().toLowerCase())
       return { error: null }
     } catch (error: any) {
       return { error }

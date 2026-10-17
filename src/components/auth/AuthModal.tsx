@@ -41,6 +41,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const [verificationWarning, setVerificationWarning] = useState<string | null>(null)
+
+  // Mensagens de erro por campo
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: string
+    password?: string
+    passwordConfirm?: string
+    terms?: string
+    general?: string
+  }>({})
 
   const { signIn, signUp, requestPasswordReset, requestVerification, refreshUser, user } = useAuth()
   const { toast } = useToast()
@@ -50,16 +60,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Submissão do login
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    if (loading) return
+    setFieldErrors({})
+
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) {
+      setFieldErrors({ email: 'Informe seu e-mail.' })
+      return
+    }
+    if (!password) {
+      setFieldErrors({ password: 'Informe sua senha.' })
+      return
+    }
 
     setLoading(true)
-    const { error } = await signIn(email, password)
+    const { error } = await signIn(cleanEmail, password)
     setLoading(false)
 
     if (error) {
+      const msg = 'E-mail ou senha incorretos.'
+      setFieldErrors({ general: msg })
       toast({
         title: 'Falha no login',
-        description: 'E-mail ou senha incorretos.',
+        description: msg,
         variant: 'destructive',
       })
       return
@@ -76,9 +99,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Submissão do cadastro
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    if (loading) return
+    setFieldErrors({})
+    setVerificationWarning(null)
+
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) {
+      setFieldErrors({ email: 'Informe um e-mail válido.' })
+      return
+    }
 
     if (!acceptedTerms) {
+      setFieldErrors({
+        terms: 'Você precisa aceitar os Termos e a Política de Privacidade.',
+      })
       toast({
         title: 'Termos e Privacidade',
         description:
@@ -89,6 +123,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     if (password !== passwordConfirm) {
+      setFieldErrors({
+        passwordConfirm: 'A confirmação de senha é diferente da senha informada.',
+      })
       toast({
         title: 'Senhas não conferem',
         description: 'A confirmação de senha é diferente da senha informada.',
@@ -98,51 +135,108 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     if (!passwordStrength.isValid) {
+      const passMsg = passwordStrength.isTooShort
+        ? 'A senha deve conter no mínimo 10 caracteres.'
+        : 'Esta senha é muito comum e insegura. Escolha uma senha mais forte.'
+      setFieldErrors({ password: passMsg })
       toast({
         title: 'Senha fraca ou inválida',
-        description: passwordStrength.isTooShort
-          ? 'A senha deve conter no mínimo 10 caracteres.'
-          : 'Esta senha é muito comum e insegura. Escolha uma senha mais forte.',
+        description: passMsg,
         variant: 'destructive',
       })
       return
     }
 
     setLoading(true)
-    const { error, inviteRequired } = await signUp(email, password, name)
+    const { error, errorCode, verificationSent } = await signUp(cleanEmail, password, name)
     setLoading(false)
 
     if (error) {
-      if (inviteRequired) {
+      if (errorCode === 'invite_required') {
+        const inviteMsg = 'Cadastro disponível apenas para convidados no momento.'
+        setFieldErrors({ email: inviteMsg })
         toast({
           title: 'Acesso restrito',
-          description: 'Cadastro disponível apenas para convidados no momento.',
+          description: inviteMsg,
+          variant: 'destructive',
+        })
+      } else if (errorCode === 'email_exists') {
+        const emailMsg = 'Este e-mail já tem conta. Entre ou recupere a senha.'
+        setFieldErrors({ email: emailMsg })
+        toast({
+          title: 'E-mail já cadastrado',
+          description: emailMsg,
+          variant: 'destructive',
+        })
+      } else if (errorCode === 'weak_password') {
+        const passMsg = 'A senha deve conter no mínimo 10 caracteres.'
+        setFieldErrors({ password: passMsg })
+        toast({
+          title: 'Senha inválida',
+          description: passMsg,
+          variant: 'destructive',
+        })
+      } else if (errorCode === 'rate_limit') {
+        const rateMsg = 'Muitas tentativas. Tente de novo em alguns minutos.'
+        setFieldErrors({ general: rateMsg })
+        toast({
+          title: 'Limite atingido',
+          description: rateMsg,
+          variant: 'destructive',
+        })
+      } else if (errorCode === 'network_error') {
+        const netMsg = 'Sem conexão. Conecte-se à internet para criar a conta.'
+        setFieldErrors({ general: netMsg })
+        toast({
+          title: 'Sem conexão',
+          description: netMsg,
           variant: 'destructive',
         })
       } else {
+        const genericMsg = 'Não foi possível criar a conta agora. Tente novamente.'
+        if (import.meta.env.DEV) {
+          console.error('[signUp error]', error)
+        }
+        setFieldErrors({ general: genericMsg })
         toast({
           title: 'Erro ao criar conta',
-          description: 'Não foi possível completar o cadastro. Verifique os dados.',
+          description: genericMsg,
           variant: 'destructive',
         })
       }
       return
     }
 
-    toast({
-      title: 'Conta criada com sucesso!',
-      description: 'Enviamos um link de confirmação para o seu e-mail.',
-    })
+    // Sucesso na criação da conta
+    if (verificationSent === false) {
+      setVerificationWarning(
+        'Conta criada. Não conseguimos enviar o e-mail agora. Toque em Reenviar.',
+      )
+      toast({
+        title: 'Conta criada!',
+        description: 'Não conseguimos enviar o e-mail agora. Toque em Reenviar.',
+      })
+    } else {
+      toast({
+        title: 'Conta criada com sucesso!',
+        description: 'Enviamos um link de confirmação para o seu e-mail.',
+      })
+    }
     setMode('verify')
   }
 
   // Submissão de esqueci a senha
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email) return
+    if (loading) return
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) {
+      setFieldErrors({ email: 'Informe seu e-mail.' })
+      return
+    }
 
     setLoading(true)
-    await requestPasswordReset(email)
+    await requestPasswordReset(cleanEmail)
     setLoading(false)
 
     toast({
@@ -154,10 +248,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Reenviar verificação
   const handleResendVerification = async () => {
-    if (resendCooldown > 0 || !email) return
+    const cleanEmail = email.trim().toLowerCase()
+    if (resendCooldown > 0 || !cleanEmail || loading) return
     setLoading(true)
-    await requestVerification(email)
+    const { error } = await requestVerification(cleanEmail)
     setLoading(false)
+
+    if (error) {
+      toast({
+        title: 'Não foi possível reenviar',
+        description: 'Aguarde alguns minutos e tente novamente.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setVerificationWarning(null)
     setResendCooldown(60)
 
     toast({
@@ -219,21 +325,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="space-y-3 pt-2">
                 <Button
                   onClick={() => setMode('signin')}
-                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#B4540F] hover:bg-[#964208] text-white shadow-sm transition-colors cursor-pointer"
                 >
                   Entrar com minha conta
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setMode('signup')}
-                  className="w-full h-12 rounded-xl text-sm font-semibold border-border"
+                  className="w-full h-12 rounded-xl text-sm font-semibold border-border cursor-pointer"
                 >
                   Criar conta (somente convidados)
                 </Button>
                 <Button
                   variant="ghost"
                   onClick={onClose}
-                  className="w-full h-11 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground"
+                  className="w-full h-11 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   Usar sem conta (só neste aparelho)
                 </Button>
@@ -251,6 +357,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </p>
               </div>
 
+              {fieldErrors.general && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{fieldErrors.general}</span>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="signin-email" className="text-xs font-medium">
@@ -264,10 +380,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       placeholder="seu@email.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        if (fieldErrors.email)
+                          setFieldErrors((prev) => ({ ...prev, email: undefined }))
+                      }}
                       className="h-11 pl-9 rounded-xl text-sm"
                     />
                   </div>
+                  {fieldErrors.email && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 mt-1 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {fieldErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -278,7 +407,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setMode('forgot')}
-                      className="text-xs text-[#F59E4C] hover:underline"
+                      className="text-xs text-[#B4540F] hover:underline"
                     >
                       Esqueci minha senha
                     </button>
@@ -291,34 +420,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       placeholder="••••••••••"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value)
+                        if (fieldErrors.password)
+                          setFieldErrors((prev) => ({ ...prev, password: undefined }))
+                      }}
                       className="h-11 pl-9 rounded-xl text-sm"
                     />
                   </div>
+                  {fieldErrors.password && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 mt-1 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {fieldErrors.password}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2 pt-2">
                 <Button
                   type="submit"
-                  disabled={loading}
-                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+                  disabled={loading || !email || !password}
+                  className="w-full h-12 rounded-xl text-sm font-semibold transition-colors disabled:bg-muted disabled:text-[#6B645C] disabled:opacity-100 disabled:cursor-not-allowed bg-[#B4540F] hover:bg-[#964208] text-white shadow-sm cursor-pointer"
                 >
-                  {loading ? 'Entrando...' : 'Entrar'}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 animate-spin" /> Entrando...
+                    </span>
+                  ) : (
+                    'Entrar'
+                  )}
                 </Button>
                 <div className="flex items-center justify-between text-xs pt-2">
                   <button
                     type="button"
                     onClick={() => setMode('signup')}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Ainda não tem conta?{' '}
-                    <span className="text-[#F59E4C] font-semibold">Cadastre-se</span>
+                    <span className="text-[#B4540F] font-semibold">Cadastre-se</span>
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Usar sem conta
                   </button>
@@ -334,6 +482,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <h2 className="text-xl font-bold text-foreground">Criar Conta</h2>
                 <p className="text-xs text-muted-foreground">Fase de acesso fechado por convite.</p>
               </div>
+
+              {fieldErrors.general && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{fieldErrors.general}</span>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -365,10 +523,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       placeholder="email-convidado@exemplo.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        if (fieldErrors.email)
+                          setFieldErrors((prev) => ({ ...prev, email: undefined }))
+                      }}
                       className="h-11 pl-9 rounded-xl text-sm"
                     />
                   </div>
+                  {fieldErrors.email && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 mt-1 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {fieldErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -383,10 +554,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       placeholder="Pelo menos 10 caracteres"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value)
+                        if (fieldErrors.password)
+                          setFieldErrors((prev) => ({ ...prev, password: undefined }))
+                      }}
                       className="h-11 pl-9 rounded-xl text-sm"
                     />
                   </div>
+                  {fieldErrors.password && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 mt-1 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {fieldErrors.password}
+                    </p>
+                  )}
                   {password && (
                     <div className="text-[11px] pt-1 flex items-center justify-between">
                       <span className="text-muted-foreground">
@@ -425,56 +609,90 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       placeholder="Repita a senha"
                       value={passwordConfirm}
-                      onChange={(e) => setPasswordConfirm(e.target.value)}
+                      onChange={(e) => {
+                        setPasswordConfirm(e.target.value)
+                        if (fieldErrors.passwordConfirm)
+                          setFieldErrors((prev) => ({ ...prev, passwordConfirm: undefined }))
+                      }}
                       className="h-11 pl-9 rounded-xl text-sm"
                     />
                   </div>
+                  {fieldErrors.passwordConfirm && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 mt-1 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {fieldErrors.passwordConfirm}
+                    </p>
+                  )}
                 </div>
 
-                <div className="flex items-start gap-2 pt-1">
-                  <Checkbox
-                    id="terms"
-                    checked={acceptedTerms}
-                    onCheckedChange={(val) => setAcceptedTerms(Boolean(val))}
-                    className="mt-0.5"
-                  />
-                  <Label
-                    htmlFor="terms"
-                    className="text-[11px] text-muted-foreground leading-tight cursor-pointer"
-                  >
-                    Li e aceito os{' '}
-                    <Link to="/termos" target="_blank" className="text-[#F59E4C] underline">
-                      Termos de Uso
-                    </Link>{' '}
-                    e a{' '}
-                    <Link to="/privacidade" target="_blank" className="text-[#F59E4C] underline">
-                      Política de Privacidade
-                    </Link>
-                    .
-                  </Label>
+                <div className="space-y-1 pt-1">
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="terms"
+                      checked={acceptedTerms}
+                      onCheckedChange={(val) => {
+                        setAcceptedTerms(Boolean(val))
+                        if (fieldErrors.terms)
+                          setFieldErrors((prev) => ({ ...prev, terms: undefined }))
+                      }}
+                      className="mt-0.5"
+                    />
+                    <Label
+                      htmlFor="terms"
+                      className="text-[11px] text-muted-foreground leading-tight cursor-pointer"
+                    >
+                      Li e aceito os{' '}
+                      <Link to="/termos" target="_blank" className="text-[#B4540F] underline">
+                        Termos de Uso
+                      </Link>{' '}
+                      e a{' '}
+                      <Link to="/privacidade" target="_blank" className="text-[#B4540F] underline">
+                        Política de Privacidade
+                      </Link>
+                      .
+                    </Label>
+                  </div>
+                  {fieldErrors.terms && (
+                    <p
+                      role="alert"
+                      className="text-xs text-destructive flex items-center gap-1 pl-6 font-medium"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {fieldErrors.terms}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2 pt-2">
                 <Button
                   type="submit"
-                  disabled={loading}
-                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+                  disabled={loading || !email || !password || !passwordConfirm || !acceptedTerms}
+                  className="w-full h-12 rounded-xl text-sm font-semibold transition-colors disabled:bg-muted disabled:text-[#6B645C] disabled:opacity-100 disabled:cursor-not-allowed bg-[#B4540F] hover:bg-[#964208] text-white shadow-sm cursor-pointer"
                 >
-                  {loading ? 'Criando conta...' : 'Criar conta'}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 animate-spin" /> Criando conta...
+                    </span>
+                  ) : (
+                    'Criar conta'
+                  )}
                 </Button>
                 <div className="flex items-center justify-between text-xs pt-2">
                   <button
                     type="button"
                     onClick={() => setMode('signin')}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
-                    Já tem conta? <span className="text-[#F59E4C] font-semibold">Entrar</span>
+                    Já tem conta? <span className="text-[#B4540F] font-semibold">Entrar</span>
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Fechar
                   </button>
@@ -514,15 +732,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="space-y-2 pt-2">
                 <Button
                   type="submit"
-                  disabled={loading}
-                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#F59E4C] hover:bg-[#F59E4C]/90 text-white"
+                  disabled={loading || !email}
+                  className="w-full h-12 rounded-xl text-sm font-semibold transition-colors disabled:bg-muted disabled:text-[#6B645C] disabled:opacity-100 disabled:cursor-not-allowed bg-[#B4540F] hover:bg-[#964208] text-white shadow-sm cursor-pointer"
                 >
-                  {loading ? 'Enviando...' : 'Enviar link de redefinição'}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 animate-spin" /> Enviando...
+                    </span>
+                  ) : (
+                    'Enviar link de redefinição'
+                  )}
                 </Button>
                 <button
                   type="button"
                   onClick={() => setMode('signin')}
-                  className="w-full text-center text-xs text-muted-foreground hover:text-foreground pt-1"
+                  className="w-full text-center text-xs text-muted-foreground hover:text-foreground pt-1 cursor-pointer"
                 >
                   Voltar para login
                 </button>
@@ -540,18 +764,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <h2 className="text-xl font-bold text-foreground">Confirme seu e-mail</h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Enviamos uma mensagem de confirmação para{' '}
-                  <strong className="text-foreground">{email}</strong>. Abra o link no e-mail para
-                  ativar a sincronização na nuvem.
+                  <strong className="text-foreground">{email.trim().toLowerCase()}</strong>. Abra o
+                  link no e-mail para ativar a sincronização na nuvem.
                 </p>
+                {verificationWarning && (
+                  <div
+                    role="alert"
+                    className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs text-left flex items-start gap-2 mt-2"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <span>{verificationWarning}</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2.5 pt-2">
                 <Button
                   onClick={handleCheckVerified}
                   disabled={loading}
-                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white"
+                  className="w-full h-12 rounded-xl text-sm font-semibold bg-[#34BEAA] hover:bg-[#34BEAA]/90 text-white cursor-pointer"
                 >
-                  {loading ? 'Verificando...' : 'Já confirmei'}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4 animate-spin" /> Verificando...
+                    </span>
+                  ) : (
+                    'Já confirmei'
+                  )}
                 </Button>
 
                 <div className="flex gap-2">
@@ -559,14 +798,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     variant="outline"
                     disabled={resendCooldown > 0 || loading}
                     onClick={handleResendVerification}
-                    className="flex-1 h-11 rounded-xl text-xs font-semibold border-border"
+                    className="flex-1 h-11 rounded-xl text-xs font-semibold border-border cursor-pointer"
                   >
                     {resendCooldown > 0 ? `Aguarde ${resendCooldown}s` : 'Reenviar e-mail'}
                   </Button>
                   <Button
                     variant="ghost"
                     onClick={() => setMode('signup')}
-                    className="flex-1 h-11 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground"
+                    className="flex-1 h-11 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Trocar e-mail
                   </Button>
