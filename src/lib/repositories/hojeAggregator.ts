@@ -9,6 +9,8 @@ import {
   EscritaNote,
   TreinoPlanoSemanal,
   TreinoLog,
+  ActivityPlan,
+  ActivityLog,
   ReadingGoalsProgress,
   Livro,
   Course,
@@ -123,6 +125,8 @@ export async function getFastTodayData(
     studySessions,
     studyGoals,
     achievements,
+    activityPlans,
+    activityLogs,
   ] = await Promise.all([
     activeModules.treino
       ? idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO)
@@ -137,21 +141,69 @@ export async function getFastTodayData(
       : Promise.resolve([]),
     activeModules.estudos ? idb.getAll<StudyGoal>(idb.STORE_STUDY_GOALS) : Promise.resolve([]),
     activeModules.trabalho ? idb.getAll<Achievement>(idb.STORE_ACHIEVEMENTS) : Promise.resolve([]),
+    activeModules.treino ? idb.getAll<ActivityPlan>(idb.STORE_ACTIVITY_PLANS) : Promise.resolve([]),
+    activeModules.treino ? idb.getAll<ActivityLog>(idb.STORE_ACTIVITY_LOGS) : Promise.resolve([]),
   ])
 
   // ========================
-  // 1. TREINO
+  // 1. TREINO (MULTIMODAL: MUSCULAÇÃO + CARDIO + OUTROS)
   // ========================
   const plan = allPlans.find((p) => p.dayOfWeek === dayOfWeek)
   const log = allLogs.find((l) => l.day === todayDateKey)
-  const isRestDay = !plan || !plan.exercises || plan.exercises.length === 0
-  const totalPlannedSets = isRestDay
-    ? 0
-    : plan.exercises.reduce((sum, e) => sum + (e.series || 0), 0)
+  const hasMuscPlan = Boolean(plan && plan.exercises && plan.exercises.length > 0)
+  const totalPlannedSets = hasMuscPlan
+    ? plan!.exercises.reduce((sum, e) => sum + (e.series || 0), 0)
+    : 0
   const completedSetsCount =
     log && log.completedSets ? log.completedSets.filter((s) => s.concluido).length : 0
+  const isMuscCompleted =
+    hasMuscPlan && totalPlannedSets > 0 && completedSetsCount >= totalPlannedSets
+
+  // Cardio e Outros planejados para hoje
+  const todayCardioPlans = (activityPlans || []).filter(
+    (p) => p.type === 'cardio' && Number(p.weekday) === dayOfWeek && p.active !== false,
+  )
+  const todayOutrosPlans = (activityPlans || []).filter(
+    (p) => p.type === 'outros' && Number(p.weekday) === dayOfWeek && p.active !== false,
+  )
+  const todayActivityLogs = (activityLogs || []).filter((l) => l.date === todayDateKey)
+
+  // Status de cardio hoje
+  const cardioSessionsStatus = todayCardioPlans.map((cp) => {
+    const matchingLog = todayActivityLogs.find((l) => l.type === 'cardio' && l.planId === cp.id)
+    const isDone = Boolean(matchingLog?.done)
+    return { plan: cp, log: matchingLog, isDone }
+  })
+
+  // Status de outros hoje
+  const outrosSessionsStatus = todayOutrosPlans.map((op) => {
+    const matchingLog = todayActivityLogs.find(
+      (l) => l.type === 'outros' && (l.planId === op.id || l.sport === op.sport),
+    )
+    const isDone = Boolean(matchingLog?.done)
+    return { plan: op, log: matchingLog, isDone }
+  })
+
+  // Total de sessões planejadas hoje (qualquer tipo)
+  const totalPlannedSessions =
+    (hasMuscPlan ? 1 : 0) + todayCardioPlans.length + todayOutrosPlans.length
+
+  const completedSessionsCount =
+    (hasMuscPlan && isMuscCompleted ? 1 : 0) +
+    cardioSessionsStatus.filter((s) => s.isDone).length +
+    outrosSessionsStatus.filter((s) => s.isDone).length
+
+  const hasAnyPlannedSessionToday = totalPlannedSessions > 0
+  const isRestDay = !hasAnyPlannedSessionToday
+
+  // Treino concluído quando TODAS as sessões planejadas do dia estiverem concluídas
   const isTreinoCompleted =
-    !isRestDay && totalPlannedSets > 0 && completedSetsCount >= totalPlannedSets
+    hasAnyPlannedSessionToday && completedSessionsCount >= totalPlannedSessions
+
+  // Km total de cardio realizado hoje
+  const todayCardioKm = todayActivityLogs
+    .filter((l) => l.type === 'cardio')
+    .reduce((sum, l) => sum + (Number(l.km) || 0), 0)
 
   // Descobre a primeira série pendente
   let firstPendingSetIndex = 0
@@ -262,7 +314,7 @@ export async function getFastTodayData(
   let goalsDone = 0
 
   // Treino
-  const treinoHasGoal = Boolean(activeModules.treino && !isRestDay && totalPlannedSets > 0)
+  const treinoHasGoal = Boolean(activeModules.treino && hasAnyPlannedSessionToday)
   if (treinoHasGoal) {
     goalsTotal++
     if (isTreinoCompleted) goalsDone++
@@ -373,15 +425,40 @@ export async function getFastTodayData(
   let nextStep: NextStepInfo
 
   if (activeModules.treino && treinoHasGoal && !isTreinoCompleted) {
-    const remainingSets = Math.max(0, totalPlannedSets - completedSetsCount)
-    const exCount = plan?.exercises.length || 0
-    nextStep = {
-      type: 'treino',
-      label: 'PRÓXIMO PASSO',
-      title: plan?.workoutName || 'Treino de hoje',
-      subtitle: `${exCount} exercícios · ${remainingSets} ${remainingSets === 1 ? 'série restante' : 'séries restantes'}`,
-      actionText: completedSetsCount > 0 ? 'Continuar treino' : 'Começar treino',
-      payload: { firstPendingSetIndex },
+    // Escolhe a sessão pendente
+    if (hasMuscPlan && !isMuscCompleted) {
+      const remainingSets = Math.max(0, totalPlannedSets - completedSetsCount)
+      const exCount = plan?.exercises.length || 0
+      nextStep = {
+        type: 'treino',
+        label: 'PRÓXIMO PASSO',
+        title: plan?.workoutName || 'Treino de hoje',
+        subtitle: `${exCount} exercícios · ${remainingSets} ${remainingSets === 1 ? 'série restante' : 'séries restantes'}`,
+        actionText: completedSetsCount > 0 ? 'Continuar treino' : 'Começar treino',
+        payload: { firstPendingSetIndex },
+      }
+    } else {
+      const pendingCardio = cardioSessionsStatus.find((s) => !s.isDone)
+      if (pendingCardio) {
+        nextStep = {
+          type: 'treino',
+          label: 'PRÓXIMO PASSO',
+          title: `Cardio: ${pendingCardio.plan.modality || 'Corrida'}`,
+          subtitle: `${pendingCardio.plan.targetKm ? `${pendingCardio.plan.targetKm} km` : ''}${pendingCardio.plan.targetMinutes ? ` · ${pendingCardio.plan.targetMinutes} min` : ''}`,
+          actionText: 'Fazer cardio',
+        }
+      } else {
+        const pendingOutros = outrosSessionsStatus.find((s) => !s.isDone)
+        nextStep = {
+          type: 'treino',
+          label: 'PRÓXIMO PASSO',
+          title: pendingOutros?.plan.sport || 'Treino de hoje',
+          subtitle: pendingOutros?.plan.time
+            ? `Horário: ${pendingOutros.plan.time}`
+            : 'Sessão planejada',
+          actionText: 'Registrar treino',
+        }
+      }
     }
   } else if (activeModules.leitura && leituraHasGoal && !isLeituraCompleted) {
     // Escolhe livro com mais páginas restantes ou o ativo
@@ -480,21 +557,45 @@ export async function getFastTodayData(
 
   if (activeModules.treino) {
     const isCompleted = isTreinoCompleted
-    const pct =
-      totalPlannedSets > 0
-        ? Math.min(100, Math.round((completedSetsCount / totalPlannedSets) * 100))
-        : 0
+    const hasMultipleOrNonMusc =
+      totalPlannedSessions > 1 || (!hasMuscPlan && totalPlannedSessions >= 1)
+
+    let displayVal = 'Descanso'
+    let legend = 'dia livre'
+    let pct = 0
+
+    if (!isRestDay) {
+      if (hasMultipleOrNonMusc) {
+        displayVal = `${completedSessionsCount}/${totalPlannedSessions}`
+        legend = `${completedSessionsCount}/${totalPlannedSessions} sessões`
+        pct = Math.min(100, Math.round((completedSessionsCount / totalPlannedSessions) * 100))
+      } else {
+        // Apenas uma sessão de musculação: mantém "séries"
+        displayVal = `${completedSetsCount}/${totalPlannedSets}`
+        legend = 'séries de hoje'
+        pct =
+          totalPlannedSets > 0
+            ? Math.min(100, Math.round((completedSetsCount / totalPlannedSets) * 100))
+            : 0
+      }
+    }
+
+    if (todayCardioKm > 0) {
+      const kmFormatted = todayCardioKm.toFixed(1).replace('.', ',')
+      legend = `${legend} · ${kmFormatted} km`
+    }
+
     goalCards.treino = {
       id: 'treino',
       name: 'Treino',
       active: true,
       hasGoalToday: treinoHasGoal,
       isCompleted,
-      displayValue: isRestDay ? 'Descanso' : `${completedSetsCount}/${totalPlannedSets}`,
-      displayTarget: totalPlannedSets,
-      displayCurrent: completedSetsCount,
+      displayValue: displayVal,
+      displayTarget: hasMultipleOrNonMusc ? totalPlannedSessions : totalPlannedSets,
+      displayCurrent: hasMultipleOrNonMusc ? completedSessionsCount : completedSetsCount,
       progressPercent: isRestDay ? 100 : pct,
-      legend: isRestDay ? 'dia livre' : 'séries de hoje',
+      legend,
     }
   }
 

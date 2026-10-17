@@ -1,12 +1,24 @@
 import { idb } from '../indexedDb'
 import { recordOutboxInTx } from '../sync/outboxHelper'
-import { TreinoPlanoSemanal, TreinoLog, ExerciseHistoryPoint } from '../types'
+import {
+  TreinoPlanoSemanal,
+  TreinoLog,
+  ExerciseHistoryPoint,
+  ActivityPlan,
+  ActivityLog,
+  TimerState,
+} from '../types'
 
 export const treinoRepository = {
-  // Planos semanais (0=Dom, 1=Seg... 6=Sab)
+  // Planos semanais de musculação (0=Dom, 1=Seg... 6=Sab)
   async getWeeklyPlans(): Promise<TreinoPlanoSemanal[]> {
     const list = await idb.getAll<TreinoPlanoSemanal>(idb.STORE_TREINO_PLANO)
-    return (list || []).sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek))
+    return (list || [])
+      .map((p) => ({
+        ...p,
+        variant: p.variant || 'academia',
+      }))
+      .sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek))
   },
 
   async getPlanByDayOfWeek(dayOfWeek: number): Promise<TreinoPlanoSemanal | undefined> {
@@ -66,6 +78,7 @@ export const treinoRepository = {
       dayOfWeek: targetDay,
       workoutName: plan.workoutName.trim(),
       exercises: plan.exercises,
+      variant: plan.variant || 'academia',
       created: existing ? existing.created : now,
       updated: now,
     }
@@ -105,6 +118,7 @@ export const treinoRepository = {
       day: log.day,
       workoutName: log.workoutName,
       completedSets: log.completedSets,
+      variant: log.variant || 'academia',
       created: existing ? existing.created : now,
       updated: now,
     }
@@ -176,5 +190,129 @@ export const treinoRepository = {
       maxWeight,
       totalSessions: history.length,
     }
+  },
+
+  // ==========================================
+  // CARDIO E OUTROS: ACTIVITY PLANS
+  // ==========================================
+  async getActivityPlans(type?: 'cardio' | 'outros'): Promise<ActivityPlan[]> {
+    const all = await idb.getAll<ActivityPlan>(idb.STORE_ACTIVITY_PLANS)
+    const filtered = (all || []).filter((p) => {
+      if (type && p.type !== type) return false
+      return true
+    })
+    return filtered.sort((a, b) => Number(a.weekday ?? 0) - Number(b.weekday ?? 0))
+  },
+
+  async getActivityPlansByWeekday(weekday: number): Promise<ActivityPlan[]> {
+    const all = await idb.getAll<ActivityPlan>(idb.STORE_ACTIVITY_PLANS)
+    return (all || []).filter((p) => Number(p.weekday) === Number(weekday) && p.active !== false)
+  },
+
+  async saveActivityPlan(
+    plan: Omit<ActivityPlan, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+  ): Promise<ActivityPlan> {
+    const now = new Date().toISOString()
+    const id =
+      plan.id ||
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `act_plan_${Date.now()}`)
+    const saved: ActivityPlan = {
+      ...plan,
+      id,
+      active: plan.active !== false,
+      createdAt: (plan as any).createdAt || now,
+      updatedAt: now,
+    }
+    await idb.runTransaction(
+      [idb.STORE_ACTIVITY_PLANS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_ACTIVITY_PLANS).put(saved)
+        recordOutboxInTx(tx, 'activityPlan', saved.id, 'upsert', saved)
+      },
+    )
+    return saved
+  },
+
+  async deleteActivityPlan(id: string): Promise<void> {
+    await idb.runTransaction(
+      [idb.STORE_ACTIVITY_PLANS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_ACTIVITY_PLANS).delete(id)
+        recordOutboxInTx(tx, 'activityPlan', id, 'delete')
+      },
+    )
+  },
+
+  // ==========================================
+  // CARDIO E OUTROS: ACTIVITY LOGS
+  // ==========================================
+  async getActivityLogs(type?: 'cardio' | 'outros'): Promise<ActivityLog[]> {
+    const all = await idb.getAll<ActivityLog>(idb.STORE_ACTIVITY_LOGS)
+    const filtered = (all || []).filter((l) => {
+      if (type && l.type !== type) return false
+      return true
+    })
+    return filtered.sort((a, b) => b.date.localeCompare(a.date))
+  },
+
+  async getActivityLogsByDate(date: string): Promise<ActivityLog[]> {
+    const all = await idb.getAll<ActivityLog>(idb.STORE_ACTIVITY_LOGS)
+    return (all || []).filter((l) => l.date === date)
+  },
+
+  async saveActivityLog(
+    log: Omit<ActivityLog, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+  ): Promise<ActivityLog> {
+    const now = new Date().toISOString()
+    const id =
+      log.id ||
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `act_log_${Date.now()}`)
+    const saved: ActivityLog = {
+      ...log,
+      id,
+      createdAt: (log as any).createdAt || now,
+      updatedAt: now,
+    }
+    await idb.runTransaction(
+      [idb.STORE_ACTIVITY_LOGS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_ACTIVITY_LOGS).put(saved)
+        recordOutboxInTx(tx, 'activityLog', saved.id, 'upsert', saved)
+      },
+    )
+    return saved
+  },
+
+  async deleteActivityLog(id: string): Promise<void> {
+    await idb.runTransaction(
+      [idb.STORE_ACTIVITY_LOGS, idb.STORE_SYNC_OUTBOX],
+      'readwrite',
+      (tx) => {
+        tx.objectStore(idb.STORE_ACTIVITY_LOGS).delete(id)
+        recordOutboxInTx(tx, 'activityLog', id, 'delete')
+      },
+    )
+  },
+
+  // ==========================================
+  // TIMER STATE (STORE LOCAL-ONLY)
+  // ==========================================
+  async getTimerState(id: string = 'cardio_active'): Promise<TimerState | undefined> {
+    return idb.get<TimerState>(idb.STORE_TIMER_STATE, id)
+  },
+
+  async saveTimerState(state: TimerState): Promise<void> {
+    await idb.put(idb.STORE_TIMER_STATE, state)
+  },
+
+  async clearTimerState(id: string = 'cardio_active'): Promise<void> {
+    await idb.delete(idb.STORE_TIMER_STATE, id)
   },
 }

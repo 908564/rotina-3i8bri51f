@@ -10,15 +10,19 @@ import { taskRepository, onTaskBadgeCountChanged } from '@/lib/repositories/task
 import { openTaskModal } from '@/lib/taskModalEvents'
 import { useToast } from '@/hooks/use-toast'
 import { useApp } from '@/lib/context'
+import { setTaskCompletionHandler } from '@/lib/taskCompletionDispatcher'
+import { useNavigate } from 'react-router-dom'
 
 export const BottomNav: React.FC = () => {
   const location = useLocation()
+  const navigate = useNavigate()
   const { toast } = useToast()
   const { notifyDataChanged, settings } = useApp()
 
   // Modais de registro rápido ativados a partir do [+] central
   const [newEntryModalOpen, setNewEntryModalOpen] = useState(false)
   const [quickPagesOpen, setQuickPagesOpen] = useState(false)
+  const [quickPagesBookId, setQuickPagesBookId] = useState<string | undefined>()
   const [quickStudyOpen, setQuickStudyOpen] = useState(false)
   const [quickWorkoutOpen, setQuickWorkoutOpen] = useState(false)
   const [quickAchievementOpen, setQuickAchievementOpen] = useState(false)
@@ -34,6 +38,36 @@ export const BottomNav: React.FC = () => {
     })
     return () => unsubscribe()
   }, [settings.activeModules])
+
+  // Configuração do setTaskCompletionHandler para atender tarefas com moduleData concluídas
+  useEffect(() => {
+    setTaskCompletionHandler((task) => {
+      if (!task.moduleData || !task.moduleData.data) return
+      const mod = task.moduleData.module
+      const data: any = task.moduleData.data
+
+      if (mod === 'leitura') {
+        if (data.bookId) setQuickPagesBookId(data.bookId)
+        setQuickPagesOpen(true)
+      } else if (mod === 'treino') {
+        if (data.tipo === 'cardio' || data.tipo === 'outros') {
+          navigate('/treino')
+        } else {
+          setQuickWorkoutOpen(true)
+        }
+      } else if (mod === 'estudos') {
+        setQuickStudyOpen(true)
+      } else if (mod === 'trabalho') {
+        setQuickAchievementOpen(true)
+      } else if (mod === 'escrita') {
+        navigate('/escrita?focus=1')
+      }
+    })
+
+    return () => {
+      setTaskCompletionHandler(null)
+    }
+  }, [navigate])
 
   const handleQuickSuccess = (msg: string) => {
     toast({ title: msg })
@@ -203,7 +237,11 @@ export const BottomNav: React.FC = () => {
       />
       <QuickPagesSheet
         open={quickPagesOpen}
-        onOpenChange={setQuickPagesOpen}
+        onOpenChange={(op) => {
+          setQuickPagesOpen(op)
+          if (!op) setQuickPagesBookId(undefined)
+        }}
+        preferredBookId={quickPagesBookId}
         onSuccess={handleQuickSuccess}
       />
       <QuickStudySheet

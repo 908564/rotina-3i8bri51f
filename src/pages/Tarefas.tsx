@@ -101,24 +101,36 @@ export default function TarefasPage() {
     setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
 
     if (updated.status === 'done') {
-      toast({
-        title: 'Tarefa concluída',
-        description: `"${task.title}"`,
-        duration: 5000,
-        action: (
-          <ToastAction
-            altText="Desfazer conclusão"
-            onClick={async () => {
-              const undone = await taskRepository.toggleTaskStatus(task.id)
-              if (undone) {
-                setTasks((prev) => prev.map((t) => (t.id === undone.id ? undone : t)))
-              }
-            }}
-          >
-            Desfazer
-          </ToastAction>
-        ),
-      })
+      const hasModuleData = Boolean(
+        updated.moduleData &&
+        updated.moduleData.module &&
+        updated.moduleData.module !== 'geral' &&
+        updated.moduleData.data,
+      )
+
+      if (hasModuleData) {
+        const { handleTaskCompletionWithToast } = await import('@/lib/taskCompletionDispatcher')
+        handleTaskCompletionWithToast(updated)
+      } else {
+        toast({
+          title: 'Tarefa concluída',
+          description: `"${task.title}"`,
+          duration: 5000,
+          action: (
+            <ToastAction
+              altText="Desfazer conclusão"
+              onClick={async () => {
+                const undone = await taskRepository.toggleTaskStatus(task.id)
+                if (undone) {
+                  setTasks((prev) => prev.map((t) => (t.id === undone.id ? undone : t)))
+                }
+              }}
+            >
+              Desfazer
+            </ToastAction>
+          ),
+        })
+      }
     }
   }
 

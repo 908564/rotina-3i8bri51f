@@ -33,6 +33,7 @@ import {
 import { StudyBlockEditor } from './StudyBlockEditor'
 import { StudyCertificatesTab } from './StudyCertificatesTab'
 import { StudyTimeTab } from './StudyTimeTab'
+import { ModuleTasksView } from '@/components/ModuleTasksView'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -68,7 +69,9 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   const [deleteCourseDialogOpen, setDeleteCourseDialogOpen] = useState(false)
   const [deletePageId, setDeletePageId] = useState<string | null>(null)
 
-  const [activeTab, setActiveTab] = useState<'anotacoes' | 'certificados' | 'tempo'>('anotacoes')
+  const [activeTab, setActiveTab] = useState<'anotacoes' | 'certificados' | 'tempo' | 'tarefas'>(
+    'anotacoes',
+  )
 
   const loadData = useCallback(async () => {
     const c = await estudosRepository.getCourseById(courseId)
@@ -265,27 +268,34 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
         onValueChange={(val) => setActiveTab(val as any)}
         className="space-y-4"
       >
-        <TabsList className="grid grid-cols-3 h-12 p-1 rounded-2xl bg-muted/60 border border-border">
+        <TabsList className="grid grid-cols-4 h-12 p-1 rounded-2xl bg-muted/60 border border-border">
           <TabsTrigger
             value="anotacoes"
-            className="rounded-xl text-xs font-semibold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs min-h-[38px]"
+            className="rounded-xl text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-subtle gap-1.5"
           >
-            Anotações ({pages.length})
+            <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Anotações</span>
+            <span className="sm:hidden">Notas</span>
           </TabsTrigger>
           <TabsTrigger
             value="certificados"
-            className="rounded-xl text-xs font-semibold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs min-h-[38px]"
+            className="rounded-xl text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-subtle gap-1.5"
           >
-            Certificados ({certificates.length})
+            <Award className="w-4 h-4" /> <span className="hidden sm:inline">Certificados</span>
+            <span className="sm:hidden">Cert.</span>
           </TabsTrigger>
           <TabsTrigger
             value="tempo"
-            className="rounded-xl text-xs font-semibold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs min-h-[38px]"
+            className="rounded-xl text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-subtle gap-1.5"
           >
-            Tempo ({sessions.length})
+            <Clock className="w-4 h-4" /> Horas
+          </TabsTrigger>
+          <TabsTrigger
+            value="tarefas"
+            className="rounded-xl text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-subtle gap-1.5"
+          >
+            <CheckSquare className="w-4 h-4" /> Tarefas
           </TabsTrigger>
         </TabsList>
-
         {/* 1. ABA ANOTAÇÕES */}
         <TabsContent value="anotacoes" className="space-y-4 m-0 focus-visible:outline-none">
           <div className="flex items-center justify-between">
@@ -412,6 +422,15 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
               loadData()
               onUpdated()
             }}
+          />
+        </TabsContent>
+
+        {/* 4. ABA TAREFAS */}
+        <TabsContent value="tarefas" className="space-y-4 m-0 focus-visible:outline-none pt-2">
+          <ModuleTasksView
+            module="estudos"
+            contextLink={{ type: 'course', id: course.id }}
+            contextTitle={course.name}
           />
         </TabsContent>
       </Tabs>

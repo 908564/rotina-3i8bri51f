@@ -14,9 +14,9 @@ export function setTaskCompletionHandler(handler: QuickRegisterHandler | null) {
 export function handleTaskCompletionWithToast(task: Task) {
   const hasModuleData = Boolean(
     task.moduleData &&
-      task.moduleData.module &&
-      task.moduleData.module !== 'geral' &&
-      task.moduleData.data,
+    task.moduleData.module &&
+    task.moduleData.module !== 'geral' &&
+    task.moduleData.data,
   )
 
   if (hasModuleData && registerHandler) {

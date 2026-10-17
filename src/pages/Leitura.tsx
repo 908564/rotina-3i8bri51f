@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { BookFormModal } from '@/components/BookFormModal'
 import { BookDetailView } from '@/components/BookDetailView'
+import { ModuleTasksView } from '@/components/ModuleTasksView'
 import { cn } from '@/lib/utils'
 
 export default function LeituraPage() {
@@ -24,6 +25,7 @@ export default function LeituraPage() {
   const [focusGoals, setFocusGoals] = useState<boolean>(focusParam)
   const [statusFilter, setStatusFilter] = useState<'todos' | BookStatus>('todos')
   const [searchQuery, setSearchQuery] = useState('')
+  const [viewTab, setViewTab] = useState<'livros' | 'tarefas'>('livros')
 
   // Modais
   const [formModalOpen, setFormModalOpen] = useState(false)
@@ -126,6 +128,34 @@ export default function LeituraPage() {
                 <BookOpen className="w-4 h-4" />
               </div>
               <h1 className="text-xl font-bold tracking-tight text-foreground">Leitura</h1>
+            </div>
+
+            {/* Controle de aba Livros / Tarefas */}
+            <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => setViewTab('livros')}
+                className={cn(
+                  'px-3 py-1 text-xs font-bold rounded-lg transition-all',
+                  viewTab === 'livros'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Livros
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewTab('tarefas')}
+                className={cn(
+                  'px-3 py-1 text-xs font-bold rounded-lg transition-all',
+                  viewTab === 'tarefas'
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Tarefas
+              </button>
             </div>
 
             <Button
@@ -304,151 +334,159 @@ export default function LeituraPage() {
             </div>
           </div>
 
-          {/* LAYOUT RESPONSIVO: NO TABLET (≥768px), 2 COLUNAS (GRADE À ESQUERDA, DETALHE À DIREITA) */}
-          <div className={cn('gap-6', isTablet ? 'grid grid-cols-12 items-start' : 'block')}>
-            {/* COLUNA ESQUERDA (BIBLIOTECA EM GRADE) */}
-            <div
-              className={cn(isTablet ? (selectedBookId ? 'col-span-5' : 'col-span-12') : 'w-full')}
-            >
-              {filteredLivros.length === 0 ? (
-                <div className="p-12 text-center rounded-2xl border border-dashed border-border bg-card/40 space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#34BEAA]/10 text-[#34BEAA] flex items-center justify-center mx-auto">
-                    <BookMarked className="w-6 h-6" />
+          {viewTab === 'tarefas' ? (
+            <div className="pt-2">
+              <ModuleTasksView module="leitura" />
+            </div>
+          ) : (
+            /* LAYOUT RESPONSIVO: NO TABLET (≥768px), 2 COLUNAS (GRADE À ESQUERDA, DETALHE À DIREITA) */
+            <div className={cn('gap-6', isTablet ? 'grid grid-cols-12 items-start' : 'block')}>
+              {/* COLUNA ESQUERDA (BIBLIOTECA EM GRADE) */}
+              <div
+                className={cn(
+                  isTablet ? (selectedBookId ? 'col-span-5' : 'col-span-12') : 'w-full',
+                )}
+              >
+                {filteredLivros.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl border border-dashed border-border bg-card/40 space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#34BEAA]/10 text-[#34BEAA] flex items-center justify-center mx-auto">
+                      <BookMarked className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-foreground">Nenhum livro encontrado</h3>
+                      <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                        {searchQuery || statusFilter !== 'todos'
+                          ? 'Tente ajustar os filtros de busca para encontrar outros livros.'
+                          : 'Comece adicionando seu primeiro livro à sua biblioteca pessoal.'}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleOpenAdd}
+                      className="h-9 px-4 rounded-xl bg-[#34BEAA] text-white text-xs font-semibold"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Livro
+                    </Button>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-foreground">Nenhum livro encontrado</h3>
-                    <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                      {searchQuery || statusFilter !== 'todos'
-                        ? 'Tente ajustar os filtros de busca para encontrar outros livros.'
-                        : 'Comece adicionando seu primeiro livro à sua biblioteca pessoal.'}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleOpenAdd}
-                    className="h-9 px-4 rounded-xl bg-[#34BEAA] text-white text-xs font-semibold"
+                ) : (
+                  <div
+                    className={cn(
+                      'grid gap-3.5',
+                      isTablet && selectedBookId
+                        ? 'grid-cols-2'
+                        : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
+                    )}
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Livro
-                  </Button>
-                </div>
-              ) : (
-                <div
-                  className={cn(
-                    'grid gap-3.5',
-                    isTablet && selectedBookId
-                      ? 'grid-cols-2'
-                      : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
-                  )}
-                >
-                  {filteredLivros.map((livro) => {
-                    const isSelected = selectedBookId === livro.id
-                    const progress = livro.totalPages
-                      ? Math.min(100, Math.round((livro.currentPage / livro.totalPages) * 100))
-                      : 0
+                    {filteredLivros.map((livro) => {
+                      const isSelected = selectedBookId === livro.id
+                      const progress = livro.totalPages
+                        ? Math.min(100, Math.round((livro.currentPage / livro.totalPages) * 100))
+                        : 0
 
-                    return (
-                      <Card
-                        key={livro.id}
-                        onClick={() => {
-                          setSelectedBookId(livro.id)
-                          setFocusGoals(false)
-                        }}
-                        className={cn(
-                          'rounded-2xl border-border overflow-hidden cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 group bg-card',
-                          isSelected && 'ring-2 ring-[#34BEAA]',
-                        )}
-                      >
-                        {/* CAPA (1.55:1 ASPECT RATIO) */}
-                        <div className="relative aspect-[1/1.45] w-full bg-muted/40 overflow-hidden">
-                          {livro.coverPhoto ? (
-                            <img
-                              src={livro.coverPhoto}
-                              alt={livro.title}
-                              className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#34BEAA]/20 via-[#34BEAA]/10 to-transparent text-[#34BEAA] font-black text-4xl">
-                              {livro.title.charAt(0).toUpperCase()}
-                            </div>
+                      return (
+                        <Card
+                          key={livro.id}
+                          onClick={() => {
+                            setSelectedBookId(livro.id)
+                            setFocusGoals(false)
+                          }}
+                          className={cn(
+                            'rounded-2xl border-border overflow-hidden cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 group bg-card',
+                            isSelected && 'ring-2 ring-[#34BEAA]',
                           )}
-
-                          {/* BADGE DE STATUS */}
-                          <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center pointer-events-none">
-                            <span
-                              className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full backdrop-blur-md shadow-xs ${
-                                livro.status === 'concluido'
-                                  ? 'bg-[#3D9C73]/90 text-white'
-                                  : livro.status === 'lendo'
-                                    ? 'bg-[#34BEAA]/90 text-white'
-                                    : 'bg-black/60 text-white'
-                              }`}
-                            >
-                              {livro.status === 'concluido'
-                                ? 'Concluído'
-                                : livro.status === 'lendo'
-                                  ? 'Lendo'
-                                  : 'Quero ler'}
-                            </span>
-                            {livro.totalPages && (
-                              <span className="text-[10px] font-bold bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded-md">
-                                {progress}%
-                              </span>
+                        >
+                          {/* CAPA (1.55:1 ASPECT RATIO) */}
+                          <div className="relative aspect-[1/1.45] w-full bg-muted/40 overflow-hidden">
+                            {livro.coverPhoto ? (
+                              <img
+                                src={livro.coverPhoto}
+                                alt={livro.title}
+                                className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#34BEAA]/20 via-[#34BEAA]/10 to-transparent text-[#34BEAA] font-black text-4xl">
+                                {livro.title.charAt(0).toUpperCase()}
+                              </div>
                             )}
-                          </div>
-                        </div>
 
-                        {/* INFO */}
-                        <CardContent className="p-3 space-y-1">
-                          <h3 className="text-xs font-bold text-foreground line-clamp-2 leading-tight">
-                            {livro.title}
-                          </h3>
-                          <p className="text-[11px] text-muted-foreground line-clamp-1">
-                            {livro.author}
-                          </p>
-                          <div className="pt-1">
-                            <Progress
-                              value={progress}
-                              className="h-1 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
-                            />
+                            {/* BADGE DE STATUS */}
+                            <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center pointer-events-none">
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full backdrop-blur-md shadow-xs ${
+                                  livro.status === 'concluido'
+                                    ? 'bg-[#3D9C73]/90 text-white'
+                                    : livro.status === 'lendo'
+                                      ? 'bg-[#34BEAA]/90 text-white'
+                                      : 'bg-black/60 text-white'
+                                }`}
+                              >
+                                {livro.status === 'concluido'
+                                  ? 'Concluído'
+                                  : livro.status === 'lendo'
+                                    ? 'Lendo'
+                                    : 'Quero ler'}
+                              </span>
+                              {livro.totalPages && (
+                                <span className="text-[10px] font-bold bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded-md">
+                                  {progress}%
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+
+                          {/* INFO */}
+                          <CardContent className="p-3 space-y-1">
+                            <h3 className="text-xs font-bold text-foreground line-clamp-2 leading-tight">
+                              {livro.title}
+                            </h3>
+                            <p className="text-[11px] text-muted-foreground line-clamp-1">
+                              {livro.author}
+                            </p>
+                            <div className="pt-1">
+                              <Progress
+                                value={progress}
+                                className="h-1 bg-muted [&>div]:bg-[#34BEAA] rounded-full"
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* COLUNA DIREITA EM TABLET (DETALHE DO LIVRO SELECIONADO) */}
+              {isTablet && selectedBookId && (
+                <div className="col-span-7 sticky top-6 bg-card border border-border rounded-2xl p-6 shadow-subtle">
+                  <BookDetailView
+                    bookId={selectedBookId}
+                    focusGoals={focusGoals}
+                    onBack={() => {
+                      setSelectedBookId(null)
+                      setFocusGoals(false)
+                      if (searchParams.get('book')) {
+                        setSearchParams({})
+                      }
+                    }}
+                    onEditBook={handleOpenEdit}
+                    onBookDeleted={() => {
+                      setSelectedBookId(null)
+                      setFocusGoals(false)
+                      if (searchParams.get('book')) {
+                        setSearchParams({})
+                      }
+                      loadData()
+                      notifyDataChanged()
+                    }}
+                    onUpdated={() => {
+                      loadData()
+                      notifyDataChanged()
+                    }}
+                  />
                 </div>
               )}
             </div>
-
-            {/* COLUNA DIREITA EM TABLET (DETALHE DO LIVRO SELECIONADO) */}
-            {isTablet && selectedBookId && (
-              <div className="col-span-7 sticky top-6 bg-card border border-border rounded-2xl p-6 shadow-subtle">
-                <BookDetailView
-                  bookId={selectedBookId}
-                  focusGoals={focusGoals}
-                  onBack={() => {
-                    setSelectedBookId(null)
-                    setFocusGoals(false)
-                    if (searchParams.get('book')) {
-                      setSearchParams({})
-                    }
-                  }}
-                  onEditBook={handleOpenEdit}
-                  onBookDeleted={() => {
-                    setSelectedBookId(null)
-                    setFocusGoals(false)
-                    if (searchParams.get('book')) {
-                      setSearchParams({})
-                    }
-                    loadData()
-                    notifyDataChanged()
-                  }}
-                  onUpdated={() => {
-                    loadData()
-                    notifyDataChanged()
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 

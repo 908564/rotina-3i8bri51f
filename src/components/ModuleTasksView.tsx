@@ -34,6 +34,7 @@ export function ModuleTasksView({
   className = '',
   onTaskCompleted,
 }: ModuleTasksViewProps) {
+  const { onTaskCompleted: handleCompletedFromProp } = { onTaskCompleted }
   const { dataVersion } = useApp()
   const [tasks, setTasks] = useState<Task[]>([])
   const [books, setBooks] = useState<Livro[]>([])
@@ -80,6 +81,10 @@ export function ModuleTasksView({
       setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
       if (updated.status === 'done') {
         onTaskCompleted?.(updated)
+        // Toast e QuickRegisterHandler (se tiver moduleData preenchido)
+        import('@/lib/taskCompletionDispatcher').then(({ handleTaskCompletionWithToast }) => {
+          handleTaskCompletionWithToast(updated)
+        })
       }
     }
   }

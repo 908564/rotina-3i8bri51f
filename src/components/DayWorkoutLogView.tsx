@@ -103,6 +103,7 @@ export const DayWorkoutLogView: React.FC<DayWorkoutLogViewProps> = ({
     await treinoRepository.saveLog({
       day: dateStr,
       workoutName: plan.workoutName,
+      variant: plan.variant || 'academia',
       completedSets: completedList,
     })
 

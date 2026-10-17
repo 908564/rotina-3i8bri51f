@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { QuickAddPagesModal } from '@/components/QuickAddPagesModal'
 import { EditBookGoalModal } from '@/components/GoalEditorModal'
+import { ModuleTasksView } from '@/components/ModuleTasksView'
 import { useToast } from '@/hooks/use-toast'
 
 interface BookDetailViewProps {
@@ -605,6 +606,15 @@ export const BookDetailView: React.FC<BookDetailViewProps> = ({
             ))}
           </div>
         )}
+      </div>
+
+      {/* SEÇÃO: TAREFAS VINCULADAS A ESTE LIVRO */}
+      <div className="space-y-3 pt-2">
+        <ModuleTasksView
+          module="leitura"
+          contextLink={{ type: 'book', id: book.id }}
+          contextTitle={book.title}
+        />
       </div>
 
       {/* SEÇÃO: HISTÓRICO DE LEITURA */}

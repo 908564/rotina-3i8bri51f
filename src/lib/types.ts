@@ -228,12 +228,16 @@ export interface ReadingGoalsProgress {
 // ========================
 // 3) TREINO
 // ========================
+export type WorkoutVariant = 'academia' | 'calistenia'
+
 export interface PlannedExercise {
   id: string
   nome: string
   series: number
-  repeticoes: string | number
-  carga: number // em kg
+  repeticoes: string | number // ex: 10, "10-12", ou em calistenia "30s"
+  carga: number // em kg (0 se peso corporal, > 0 se carga adicional)
+  unitType?: 'reps' | 'seconds' // calistenia: repetições ou isometria
+  isBodyweight?: boolean // calistenia: peso do corpo
 }
 
 export interface TreinoPlanoSemanal {
@@ -241,6 +245,7 @@ export interface TreinoPlanoSemanal {
   dayOfWeek: number // 0=Domingo, 1=Segunda, ..., 6=Sábado
   workoutName: string
   exercises: PlannedExercise[]
+  variant?: WorkoutVariant // academia | calistenia (padrão: academia)
   created: string
   updated: string
 }
@@ -258,6 +263,7 @@ export interface TreinoLog {
   day: string // YYYY-MM-DD
   workoutName: string
   completedSets: CompletedSet[]
+  variant?: WorkoutVariant
   created: string
   updated: string
 }
@@ -412,10 +418,23 @@ export interface Idea {
   updatedAt: string
 }
 
+export type ActivityPlanType = 'musculacao' | 'cardio' | 'outros'
+export type CardioModality = 'Corrida' | 'Caminhada' | 'Bicicleta'
+export type CardioIntensity = 'Leve' | 'Moderada' | 'Intensa'
+
 export interface ActivityPlan {
   id: string // UUID
-  module: ModuleKey
-  title: string
+  module?: ModuleKey // compatibilidade
+  weekday?: number // 0=Domingo..6=Sábado
+  type?: ActivityPlanType // musculacao | cardio | outros
+  modality?: string // 'Corrida' | 'Caminhada' | 'Bicicleta' ou nome do esporte
+  sport?: string // alias/nome do esporte
+  time?: string | null // HH:MM
+  targetKm?: number | null // km decimal
+  targetMinutes?: number | null // minutos inteiros
+  intensity?: CardioIntensity | string | null // Leve, Moderada, Intensa
+  active?: boolean // true/false
+  title?: string // compatibilidade
   targetValue?: number
   unit?: string
   frequency?: 'diaria' | 'semanal'
@@ -426,12 +445,19 @@ export interface ActivityPlan {
 
 export interface ActivityLog {
   id: string // UUID
-  module: ModuleKey
-  planId?: string
+  module?: ModuleKey // compatibilidade
+  planId?: string | null
   date: string // AAAA-MM-DD
-  value?: number
-  durationMinutes?: number
-  notes?: string
+  type?: ActivityPlanType // musculacao | cardio | outros
+  modality?: string // 'Corrida' | 'Caminhada' | 'Bicicleta' ou nome do esporte
+  sport?: string // alias do esporte
+  km?: number | null // km realizado
+  minutes?: number | null // minutos reais
+  intensity?: CardioIntensity | string | null // percepção
+  notes?: string | null
+  done?: boolean
+  value?: number // compatibilidade
+  durationMinutes?: number // compatibilidade
   source?: 'auto' | 'manual' | 'timer'
   createdAt: string
   updatedAt: string

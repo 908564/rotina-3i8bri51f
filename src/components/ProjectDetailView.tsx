@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ModuleTasksView } from '@/components/ModuleTasksView'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { getTodayDateKey, parseLocalDate } from '@/lib/dateUtils'
@@ -251,6 +252,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* SEÇÃO: TAREFAS VINCULADAS AO PROJETO */}
+      <div className="pt-1">
+        <ModuleTasksView
+          module="trabalho"
+          contextLink={{ type: 'project', id: project.id }}
+          contextTitle={project.name}
+        />
+      </div>
 
       {/* SEÇÃO 1: CHECKLIST DE TAREFAS */}
       <Card className="rounded-2xl border-border bg-card shadow-subtle overflow-hidden">

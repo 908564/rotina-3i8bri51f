@@ -28,6 +28,7 @@ import {
 } from '@/lib/dateUtils'
 import { useAutosave } from '@/hooks/useAutosave'
 import { toast } from '@/hooks/use-toast'
+import { ModuleTasksView } from '@/components/ModuleTasksView'
 
 function getTodayDateStr(): string {
   return getTodayDateKey()
@@ -53,6 +54,7 @@ export default function EscritaPage() {
   const [searchResults, setSearchResults] = useState<EscritaNote[]>([])
   const [calendarOpen, setCalendarOpen] = useState<boolean>(false)
   const [allNotesDates, setAllNotesDates] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState<'diario' | 'tarefas'>('diario')
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isInitialMount = useRef<boolean>(true)
@@ -302,6 +304,34 @@ export default function EscritaPage() {
             <h1 className="text-xl font-bold tracking-tight text-foreground">Escrita</h1>
           </div>
 
+          {/* Abas Diário / Tarefas */}
+          <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border">
+            <button
+              type="button"
+              onClick={() => setActiveTab('diario')}
+              className={cn(
+                'px-3 py-1 text-xs font-bold rounded-lg transition-all',
+                activeTab === 'diario'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Diário
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('tarefas')}
+              className={cn(
+                'px-3 py-1 text-xs font-bold rounded-lg transition-all',
+                activeTab === 'tarefas'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Tarefas
+            </button>
+          </div>
+
           <div className="flex items-center gap-2">
             {/* Indicador de Salvamento */}
             <div className="text-xs flex items-center gap-1 min-w-[70px] justify-end">
@@ -356,8 +386,12 @@ export default function EscritaPage() {
           </div>
         </div>
 
-        {/* MODO BUSCA */}
-        {searchMode ? (
+        {/* SE ABA TAREFAS */}
+        {activeTab === 'tarefas' ? (
+          <div className="space-y-4 pt-2">
+            <ModuleTasksView module="escrita" />
+          </div>
+        ) : searchMode ? (
           <div className="space-y-4 animate-fade-in">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />

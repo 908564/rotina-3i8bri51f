@@ -35,10 +35,12 @@ import { ProjectFormModal } from '@/components/ProjectFormModal'
 import { AchievementFormModal } from '@/components/AchievementFormModal'
 import { ExperienceFormModal } from '@/components/ExperienceFormModal'
 import { WorkNoteFormModal } from '@/components/WorkNoteFormModal'
+import { ModuleTasksView } from '@/components/ModuleTasksView'
+import { CheckSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/dateUtils'
 
-type WorkTab = 'projetos' | 'conquistas' | 'experiencia' | 'anotacoes'
+type WorkTab = 'projetos' | 'conquistas' | 'experiencia' | 'anotacoes' | 'tarefas'
 
 export default function TrabalhoPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -54,6 +56,7 @@ export default function TrabalhoPage() {
     tabParam === 'conquistas' ||
       tabParam === 'experiencia' ||
       tabParam === 'anotacoes' ||
+      tabParam === 'tarefas' ||
       tabParam === 'projetos'
       ? tabParam
       : 'projetos',
@@ -461,6 +464,7 @@ export default function TrabalhoPage() {
                 count: experiences.length,
               },
               { key: 'anotacoes', label: 'Anotações', icon: FileText, count: workNotes.length },
+              { key: 'tarefas', label: 'Tarefas', icon: CheckSquare },
             ].map((tab) => {
               const Icon = tab.icon
               const isSelected = activeTab === tab.key
@@ -478,14 +482,16 @@ export default function TrabalhoPage() {
                 >
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
-                  <span
-                    className={cn(
-                      'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                      isSelected ? 'bg-white/25 text-white' : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {tab.count}
-                  </span>
+                  {tab.count !== undefined && (
+                    <span
+                      className={cn(
+                        'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                        isSelected ? 'bg-white/25 text-white' : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -1025,6 +1031,15 @@ export default function TrabalhoPage() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ========================================================
+              ABA 5: TAREFAS DE TRABALHO
+             ======================================================== */}
+          {activeTab === 'tarefas' && (
+            <div className="space-y-4 animate-fade-in pt-2">
+              <ModuleTasksView module="trabalho" />
             </div>
           )}
 

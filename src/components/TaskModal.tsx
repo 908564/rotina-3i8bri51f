@@ -370,6 +370,15 @@ export function TaskModal() {
 
     setIsSubmitting(true)
     try {
+      const moduleDataCleaned = validateAndCleanModuleData(
+        module,
+        escritaData,
+        leituraData,
+        treinoData,
+        estudosData,
+        trabalhoData,
+      )
+
       await taskRepository.saveTask({
         id: editingTask?.id,
         title: title.trim(),
@@ -380,6 +389,7 @@ export function TaskModal() {
         reminder: Boolean(reminder && dueTime),
         priority,
         subtasks,
+        moduleData: moduleDataCleaned,
       })
 
       setIsOpen(false)
@@ -483,7 +493,6 @@ export function TaskModal() {
               </div>
             )}
           </div>
-
           {/* MÓDULO (Grade 3x2) */}
           <div className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-[#6B645C] dark:text-[#A8A199]">
@@ -522,8 +531,26 @@ export function TaskModal() {
               })}
             </div>
           </div>
-
-          {/* CAMPO DE VÍNCULO (Opcional, muda conforme o módulo) */}
+          {/* SEÇÃO PERSONALIZADA POR MÓDULO (animação ≤200ms) */}
+          <ModuleSectionForm
+            module={module}
+            books={books}
+            courses={courses}
+            projects={projects}
+            sportSuggestions={sportSuggestions}
+            onOpenQuickBookModal={() => setQuickBookModalOpen(true)}
+            escritaData={escritaData}
+            onChangeEscrita={(data) => setEscritaData((prev) => ({ ...prev, ...data }))}
+            leituraData={leituraData}
+            onChangeLeitura={(data) => setLeituraData((prev) => ({ ...prev, ...data }))}
+            treinoData={treinoData}
+            onChangeTreino={(data) => setTreinoData((prev) => ({ ...prev, ...data }))}
+            estudosData={estudosData}
+            onChangeEstudos={(data) => setEstudosData((prev) => ({ ...prev, ...data }))}
+            trabalhoData={trabalhoData}
+            onChangeTrabalho={(data) => setTrabalhoData((prev) => ({ ...prev, ...data }))}
+          />
+          {/* CAMPO DE VÍNCULO (Opcional, muda conforme o módulo) */}{' '}
           {module === 'leitura' && books.length > 0 && (
             <div className="space-y-1.5 p-3 rounded-2xl bg-[#F6F3EE] dark:bg-[#25201B] border border-[#EAE4DB] dark:border-[#38332B]">
               <label
@@ -553,7 +580,6 @@ export function TaskModal() {
               </p>
             </div>
           )}
-
           {module === 'estudos' && courses.length > 0 && (
             <div className="space-y-1.5 p-3 rounded-2xl bg-[#F6F3EE] dark:bg-[#25201B] border border-[#EAE4DB] dark:border-[#38332B]">
               <label
@@ -583,7 +609,6 @@ export function TaskModal() {
               </p>
             </div>
           )}
-
           {module === 'trabalho' && projects.length > 0 && (
             <div className="space-y-1.5 p-3 rounded-2xl bg-[#F6F3EE] dark:bg-[#25201B] border border-[#EAE4DB] dark:border-[#38332B]">
               <label
@@ -613,7 +638,6 @@ export function TaskModal() {
               </p>
             </div>
           )}
-
           {module === 'treino' && workoutDays.length > 0 && (
             <div className="space-y-1.5 p-3 rounded-2xl bg-[#F6F3EE] dark:bg-[#25201B] border border-[#EAE4DB] dark:border-[#38332B]">
               <label
@@ -643,7 +667,6 @@ export function TaskModal() {
               </p>
             </div>
           )}
-
           {/* QUANDO (Chips: Hoje, Amanhã, Esta semana, Data) */}
           <div className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-[#6B645C] dark:text-[#A8A199]">
@@ -733,7 +756,6 @@ export function TaskModal() {
               </span>
             )}
           </div>
-
           {/* HORÁRIO E LEMBRETE */}
           <div className="space-y-3 p-3.5 rounded-2xl bg-[#F6F3EE] dark:bg-[#25201B] border border-[#EAE4DB] dark:border-[#38332B]">
             <div className="flex items-center justify-between">
@@ -791,7 +813,6 @@ export function TaskModal() {
               </p>
             )}
           </div>
-
           {/* PRIORIDADE */}
           <div className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-[#6B645C] dark:text-[#A8A199]">
@@ -823,7 +844,6 @@ export function TaskModal() {
               })}
             </div>
           </div>
-
           {/* SUBTAREFAS */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -911,8 +931,44 @@ export function TaskModal() {
         </div>
       </div>
 
+      {/* Modal rápido de criação de livro a partir do módulo leitura */}
+      <BookFormModal
+        isOpen={quickBookModalOpen}
+        onClose={() => setQuickBookModalOpen(false)}
+        onSuccess={(newBook) => {
+          setQuickBookModalOpen(false)
+          setBooks((prev) => [newBook, ...prev])
+          setLeituraData((prev) => ({ ...prev, bookId: newBook.id }))
+        }}
+      />
+
+      {/* Diálogo confirmação de troca de módulo quando há dados preenchidos */}
+      <AlertDialog open={confirmSwitchModuleOpen} onOpenChange={setConfirmSwitchModuleOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Trocar de módulo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você já preencheu campos específicos deste módulo. Se trocar agora, esses dados
+              personalizados serão limpos. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingModule) executeModuleSwitch(pendingModule)
+              }}
+              className="rounded-xl bg-primary text-primary-foreground font-semibold"
+            >
+              Trocar módulo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Diálogo descartar */}
       <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        {' '}
         <AlertDialogContent className="rounded-2xl max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle>Descartar tarefa?</AlertDialogTitle>

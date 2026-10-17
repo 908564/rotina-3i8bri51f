@@ -9,7 +9,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Plus, Trash2, Dumbbell, GripVertical } from 'lucide-react'
-import { TreinoPlanoSemanal, PlannedExercise } from '@/lib/types'
+import { TreinoPlanoSemanal, PlannedExercise, WorkoutVariant } from '@/lib/types'
+import { cn } from '@/lib/utils'
 import { treinoRepository } from '@/lib/repositories/treinoRepository'
 import { useToast } from '@/hooks/use-toast'
 
@@ -39,6 +40,7 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
   onSaved,
 }) => {
   const [workoutName, setWorkoutName] = useState('')
+  const [variant, setVariant] = useState<WorkoutVariant>('academia')
   const [exercises, setExercises] = useState<PlannedExercise[]>([])
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
@@ -50,6 +52,7 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
     async function loadEffectivePlan() {
       if (existingPlan) {
         setWorkoutName(existingPlan.workoutName || '')
+        setVariant(existingPlan.variant || 'academia')
         setExercises(existingPlan.exercises ? [...existingPlan.exercises] : [])
         return
       }
@@ -60,9 +63,11 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
         if (cancelled) return
         if (found) {
           setWorkoutName(found.workoutName || '')
+          setVariant(found.variant || 'academia')
           setExercises(found.exercises ? [...found.exercises] : [])
         } else {
           setWorkoutName(`${DAYS_NAMES[dayOfWeek]} — Novo Treino`)
+          setVariant('academia')
           setExercises([
             {
               id: crypto.randomUUID(),
@@ -70,6 +75,8 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
               series: 3,
               repeticoes: '10-12',
               carga: 20,
+              unitType: 'reps',
+              isBodyweight: false,
             },
           ])
         }
@@ -103,8 +110,10 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
         id: crypto.randomUUID(),
         nome: '',
         series: 3,
-        repeticoes: '10-12',
+        repeticoes: variant === 'calistenia' ? '30s' : '10-12',
         carga: 0,
+        unitType: variant === 'calistenia' ? 'seconds' : 'reps',
+        isBodyweight: variant === 'calistenia',
       },
     ])
   }
@@ -165,6 +174,7 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
         id: existingPlan?.id,
         dayOfWeek: Number(dayOfWeek),
         workoutName: workoutName.trim(),
+        variant,
         exercises: validExercises,
       })
       toast({
@@ -202,11 +212,46 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
         </DialogHeader>
 
         <form onSubmit={handleSave} className="space-y-4 pt-2">
+          {/* SELEÇÃO DA VARIANTE: ACADEMIA OU CALISTENIA */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">Modalidade do Treino</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setVariant('academia')}
+                className={cn(
+                  'h-11 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2',
+                  variant === 'academia'
+                    ? 'border-[#F07B6A] bg-[#F07B6A]/10 text-[#F07B6A]'
+                    : 'border-border text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Dumbbell className="w-4 h-4" /> Academia
+              </button>
+              <button
+                type="button"
+                onClick={() => setVariant('calistenia')}
+                className={cn(
+                  'h-11 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2',
+                  variant === 'calistenia'
+                    ? 'border-[#F07B6A] bg-[#F07B6A]/10 text-[#F07B6A]'
+                    : 'border-border text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Calistenia / Peso corporal
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs font-semibold text-foreground">Nome do Treino</label>
             <Input
               type="text"
-              placeholder="Ex.: Peito e Tríceps"
+              placeholder={
+                variant === 'calistenia'
+                  ? 'Ex.: Calistenia Superior / Isometria'
+                  : 'Ex.: Peito e Tríceps'
+              }
               value={workoutName}
               onChange={(e) => setWorkoutName(e.target.value)}
               className="h-11 rounded-xl bg-background border-border font-medium"
@@ -295,29 +340,72 @@ export const WorkoutEditorModal: React.FC<WorkoutEditorModalProps> = ({
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-muted-foreground block">Reps</span>
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{variant === 'calistenia' ? 'Reps / Seg' : 'Reps'}</span>
+                          {variant === 'calistenia' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextType = item.unitType === 'seconds' ? 'reps' : 'seconds'
+                                handleUpdateExercise(item.id, 'unitType', nextType)
+                              }}
+                              className="text-[9px] text-[#F07B6A] font-semibold underline"
+                            >
+                              {item.unitType === 'seconds' ? 'Isometria (s)' : 'Reps'}
+                            </button>
+                          )}
+                        </div>
                         <Input
                           type="text"
                           value={item.repeticoes}
                           onChange={(e) =>
                             handleUpdateExercise(item.id, 'repeticoes', e.target.value)
                           }
-                          placeholder="10-12"
+                          placeholder={
+                            variant === 'calistenia' && item.unitType === 'seconds'
+                              ? '30s'
+                              : '10-12'
+                          }
                           className="h-8 text-xs rounded-lg"
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-muted-foreground block">Carga (kg)</span>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          value={item.carga}
-                          onChange={(e) =>
-                            handleUpdateExercise(item.id, 'carga', parseFloat(e.target.value) || 0)
-                          }
-                          placeholder="0"
-                          className="h-8 text-xs rounded-lg"
-                        />
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>Carga</span>
+                          {variant === 'calistenia' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextIsBody = !item.isBodyweight
+                                handleUpdateExercise(item.id, 'isBodyweight', nextIsBody ? 1 : 0)
+                                if (nextIsBody) handleUpdateExercise(item.id, 'carga', 0)
+                              }}
+                              className="text-[9px] text-[#F07B6A] font-semibold underline"
+                            >
+                              {item.isBodyweight ? 'Peso corpo' : '+kg'}
+                            </button>
+                          )}
+                        </div>
+                        {variant === 'calistenia' && item.isBodyweight ? (
+                          <div className="h-8 text-xs rounded-lg bg-muted/60 flex items-center justify-center font-semibold text-muted-foreground">
+                            Corpo
+                          </div>
+                        ) : (
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={item.carga}
+                            onChange={(e) =>
+                              handleUpdateExercise(
+                                item.id,
+                                'carga',
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            placeholder="0"
+                            className="h-8 text-xs rounded-lg"
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
