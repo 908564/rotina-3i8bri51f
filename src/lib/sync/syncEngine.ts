@@ -23,6 +23,7 @@ import {
   AppSettings,
 } from '../types'
 import { settingsRepository } from '../repositories/settingsRepository'
+import { backupSanitizers } from '../repositories/backupRepository'
 
 const META_KEY = 'default'
 const PUSH_BATCH_SIZE = 25
@@ -313,12 +314,14 @@ class SyncEngine {
   /**
    * PULL: Busca registros modificados desde lastPulledAt
    */
-  private async pullRemote(userId: string): Promise<void> {
+  private async pullRemote(userId: string): Promise<{ processed: number; discarded: number }> {
     const meta = await this.getMeta()
     let lastPulledAt = meta.lastPulledAt
     let page = 1
     let hasMore = true
     let newestRemoteUpdated = lastPulledAt
+    let processed = 0
+    let discarded = 0
 
     while (hasMore) {
       let filter = `user="${userId}"`
@@ -337,7 +340,12 @@ class SyncEngine {
       }
 
       for (const item of res.items) {
-        await this.applyRemoteRecord(item)
+        const applied = await this.applyRemoteRecord(item)
+        if (applied) {
+          processed++
+        } else {
+          discarded++
+        }
         if (!newestRemoteUpdated || item.updated > newestRemoteUpdated) {
           newestRemoteUpdated = item.updated
         }
@@ -353,28 +361,120 @@ class SyncEngine {
     if (newestRemoteUpdated) {
       await this.updateState({ lastPulledAt: newestRemoteUpdated })
     }
+
+    return { processed, discarded }
   }
 
   /**
-   * Aplica um registro do sync_records no banco local com resolução de conflitos
+   * Valida e sanitiza um registro de domínio recebido do PULL do sync_records.
+   * Retorna os dados válidos ou null se o registro for inválido (descartado).
    */
-  private async applyRemoteRecord(record: any): Promise<void> {
+  private sanitizeRemoteData(entity: SyncEntity, data: any): any | null {
+    if (!data || typeof data !== 'object') return null
+
+    switch (entity) {
+      case 'note':
+        return backupSanitizers.sanitizeEscritaNote(data)
+      case 'book':
+        return backupSanitizers.sanitizeLivro(data)
+      case 'bookNote':
+        return backupSanitizers.sanitizeLivroAnotacao(data)
+      case 'readingLog':
+        return backupSanitizers.sanitizeLeituraHistorico(data)
+      case 'workoutPlanDay':
+        return backupSanitizers.sanitizeTreinoPlanoSemanal(data)
+      case 'workoutLog':
+        return backupSanitizers.sanitizeTreinoLog(data)
+      case 'course':
+        return backupSanitizers.sanitizeCourse(data)
+      case 'studyPage':
+        return backupSanitizers.sanitizeStudyPage(data)
+      case 'certificate':
+        return backupSanitizers.sanitizeStudyCertificate(data)
+      case 'studySession':
+        return backupSanitizers.sanitizeStudySession(data)
+      case 'studyGoal':
+        return backupSanitizers.sanitizeStudyGoal(data)
+      case 'project':
+        return backupSanitizers.sanitizeProject(data)
+      case 'achievement':
+        return backupSanitizers.sanitizeAchievement(data)
+      case 'experience':
+        return backupSanitizers.sanitizeExperience(data)
+      case 'workNote':
+        return backupSanitizers.sanitizeWorkNote(data)
+      case 'daySummary':
+        return backupSanitizers.sanitizeDaySummary(data)
+      case 'task':
+        return backupSanitizers.sanitizeTask(data)
+      case 'idea':
+        return backupSanitizers.sanitizeIdea(data)
+      case 'activityPlan':
+        return backupSanitizers.sanitizeActivityPlan(data)
+      case 'activityLog':
+        return backupSanitizers.sanitizeActivityLog(data)
+      case 'moduleDay':
+        return backupSanitizers.sanitizeModuleDay(data)
+      case 'medal':
+        return backupSanitizers.sanitizeMedal(data)
+      case 'settings':
+        return backupSanitizers.sanitizeSettings(data) ?? null
+      default:
+        return null
+    }
+  }
+
+  /**
+   * Aplica um registro do sync_records no banco local com resolução de conflitos.
+   * Retorna true se aplicado, ou false se descartado por validação/erro.
+   */
+  private async applyRemoteRecord(record: any): Promise<boolean> {
+    if (!record || typeof record !== 'object') return false
+
     const entity = record.entity as SyncEntity
     const clientId = record.clientId as string
     const deletedAt = record.deletedAt as string | null
     const clientUpdatedAt = record.clientUpdatedAt as string
-    const data = record.data
+    const rawData = record.data
 
     const storeName = this.getStoreNameForEntity(entity)
-    if (!storeName) return
+    if (!storeName && entity !== 'settings') return false
 
-    // 1. Se foi deletado remotamente
-    if (deletedAt) {
-      await idb.delete(storeName, clientId)
-      return
+    // Validação de clientId / id:
+    // A maioria das entidades usa UUID como clientId; daySummary usa data YYYY-MM-DD; settings usa 'settings'
+    if (typeof clientId !== 'string' || !clientId.trim()) return false
+    if (entity === 'daySummary') {
+      if (!clientId.match(/^\d{4}-\d{2}-\d{2}$/)) return false
+    } else if (entity !== 'settings') {
+      if (!backupSanitizers.isValidUuid(clientId)) return false
     }
 
-    if (!data) return
+    // 1. Se foi deletado remotamente (tombstone)
+    if (deletedAt) {
+      if (typeof deletedAt !== 'string' || !backupSanitizers.isValidIsoDate(deletedAt)) {
+        return false // tombstone com data inválida descartada
+      }
+      if (storeName) {
+        await idb.delete(storeName, clientId)
+      }
+      return true
+    }
+
+    if (!rawData) return false
+
+    // A3: Validação rigorosa por registro: tipos, enums, tamanhos, datas e UUIDs
+    const sanitizedData = this.sanitizeRemoteData(entity, rawData)
+    if (!sanitizedData) {
+      // Registro inválido descartado no PULL
+      return false
+    }
+
+    // Garante que o identificador dos dados confere com o clientId do envelope
+    if (entity === 'daySummary') {
+      if (sanitizedData.date !== clientId) return false
+    } else if (entity !== 'settings') {
+      if (sanitizedData.id !== clientId) return false
+    }
 
     // 2. Se for texto longo com conflito potencial
     const isLongTextEntity = ['note', 'bookNote', 'studyPage', 'workNote', 'projectNote'].includes(
@@ -398,30 +498,32 @@ class SyncEngine {
       if (remoteTime > localTime) {
         // Remoto é mais recente: vira o principal. O local é salvo como cópia de conflito
         await this.saveConflictCopy(entity, localRecord, nowFormat)
-        await idb.put(storeName, data)
+        await idb.put(storeName, sanitizedData)
       } else {
         // Local é mais recente: permanece o principal. O remoto é salvo como cópia de conflito
-        await this.saveConflictCopy(entity, data, nowFormat)
+        await this.saveConflictCopy(entity, sanitizedData, nowFormat)
       }
-      return
+      return true
     }
 
     // Regra padrão: clientUpdatedAt mais recente vence
-    if (localRecord && localRecord.updated) {
-      const localTime = new Date(localRecord.updated).getTime()
+    const localUpdatedAt = localRecord?.updatedAt || localRecord?.updated
+    if (localRecord && localUpdatedAt) {
+      const localTime = new Date(localUpdatedAt).getTime()
       const remoteTime = new Date(clientUpdatedAt || record.updated).getTime()
       if (localTime > remoteTime && !pendingLocal) {
         // Local é mais recente e já foi enviado (ou não precisa ser sobrescrito)
-        return
+        return true
       }
     }
 
     // Aplica no banco local
     if (entity === 'settings') {
-      settingsRepository.saveSettings(data as AppSettings)
-    } else {
-      await idb.put(storeName, data)
+      settingsRepository.saveSettings(sanitizedData as AppSettings)
+    } else if (storeName) {
+      await idb.put(storeName, sanitizedData)
     }
+    return true
   }
 
   private async saveConflictCopy(

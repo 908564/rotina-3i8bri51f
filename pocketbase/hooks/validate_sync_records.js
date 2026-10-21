@@ -58,6 +58,36 @@ onRecordCreateRequest((e) => {
   return e.next()
 }, 'users')
 
+// Helper para geração criptograficamente segura de código de 6 dígitos numéricos (100000..999999)
+function generateSecureSixDigitCode() {
+  if (typeof $security !== 'undefined' && typeof $security.randomString === 'function') {
+    // Gera string numérica com entropia criptográfica do Go crypto/rand
+    const digits = '0123456789'
+    return $security.randomString(6, digits)
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const array = new Uint32Array(1)
+    crypto.getRandomValues(array)
+    // Mapeia para 100000..999999 uniformemente
+    const codeNum = 100000 + (array[0] % 900000)
+    return String(codeNum)
+  }
+  // Fallback seguro caso $security.randomString só aceite tamanho
+  if (
+    typeof $security !== 'undefined' &&
+    typeof $security.randomStringWithAlphabet === 'function'
+  ) {
+    return $security.randomStringWithAlphabet(6, '0123456789')
+  }
+  const str = $security.randomString(6)
+  // Gera hash numérico
+  let numStr = ''
+  for (let i = 0; i < str.length; i++) {
+    numStr += String(str.charCodeAt(i) % 10)
+  }
+  return numStr.padStart(6, '0').slice(0, 6)
+}
+
 // Hook no envio de e-mail de verificação para gerar código de 6 dígitos
 onMailerRecordVerificationSend((e) => {
   const emailRaw = (e.record && e.record.email) || e.record.getString('email') || ''
@@ -67,10 +97,35 @@ onMailerRecordVerificationSend((e) => {
     return e.next()
   }
 
-  // Gera código aleatório de 6 dígitos numéricos (100000..999999)
-  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const now = new Date()
+  const nowIso = now.toISOString()
+  const window10mAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString()
+
+  // Rate limit no envio/reenvio: máximo 5 reenvios na janela de 10 minutos por e-mail
+  try {
+    const recentSends = e.app.findRecordsByFilter(
+      'verification_codes',
+      'email = {:email} && created >= {:window}',
+      '-created',
+      10,
+      0,
+      { email, window: window10mAgo },
+    )
+    if (recentSends && recentSends.length >= 5) {
+      throw new BadRequestError(
+        'Muitas solicitações de verificação. Aguarde alguns minutos antes de tentar novamente.',
+      )
+    }
+  } catch (err) {
+    if (err instanceof BadRequestError) {
+      throw err
+    }
+  }
+
+  // Gera código aleatório criptograficamente forte de 6 dígitos
+  const code = generateSecureSixDigitCode()
   // Validade de 10 minutos
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString()
 
   try {
     const col = e.app.findCollectionByNameOrId('verification_codes')
@@ -142,83 +197,109 @@ routerAdd('POST', '/backend/v1/rotina/verificar-codigo', (e) => {
     throw genericInvalidError()
   }
 
-  // Verifica se o usuário existe e se já está verificado
-  let userRecord
-  try {
-    userRecord = e.app.findAuthRecordByEmail('_pb_users_auth_', email)
-  } catch (_) {
-    // Para não vazar existência de terceiros, retorna mensagem genérica
-    throw genericInvalidError()
-  }
+  // A1 e A2: Usar transação atômica ($app.runInTransaction) para evitar condições de corrida (incremento/verificação)
+  // e rate limiting por email/janela.
+  // A2: Nunca revelar se e-mail existe ou já está verificado na mensagem ou status — retornar genericInvalidError().
+  let verifiedSuccess = false
 
-  if (userRecord.getBool('verified')) {
-    return e.json(200, {
-      success: true,
-      verified: true,
-      message: 'E-mail já verificado.',
-    })
-  }
-
-  // Busca os códigos mais recentes para este e-mail
-  const nowIso = new Date().toISOString()
-  const records = e.app.findRecordsByFilter(
-    'verification_codes',
-    'email = {:email}',
-    '-created',
-    5,
-    0,
-    { email },
-  )
-
-  if (!records || records.length === 0) {
-    throw genericInvalidError()
-  }
-
-  // Pega o código ativo mais recente não consumido
-  const activeRecord = records.find((r) => !r.getBool('consumed'))
-  if (!activeRecord) {
-    throw genericInvalidError()
-  }
-
-  const currentAttempts = activeRecord.getInt('attempts') || 0
-  const expiresAt = activeRecord.getString('expiresAt')
-
-  // Limite de 5 tentativas por código
-  if (currentAttempts >= 5) {
-    activeRecord.set('consumed', true)
-    e.app.save(activeRecord)
-    throw new BadRequestError('Limite de tentativas excedido. Solicite um novo código.')
-  }
-
-  // Verifica expiração
-  if (expiresAt && expiresAt < nowIso) {
-    activeRecord.set('consumed', true)
-    e.app.save(activeRecord)
-    throw genericInvalidError()
-  }
-
-  // Verifica correspondência do código
-  const storedCode = activeRecord.getString('code')
-  if (storedCode !== code) {
-    const nextAttempts = currentAttempts + 1
-    activeRecord.set('attempts', nextAttempts)
-    if (nextAttempts >= 5) {
-      activeRecord.set('consumed', true)
+  e.app.runInTransaction((txApp) => {
+    // 1. Localiza usuário. Se não existir, erro genérico.
+    let userRecord
+    try {
+      userRecord = txApp.findAuthRecordByEmail('_pb_users_auth_', email)
+    } catch (_) {
+      throw genericInvalidError()
     }
-    e.app.save(activeRecord)
 
-    if (nextAttempts >= 5) {
+    // 2. A2: Se já estiver verificado, não vazar estado — responder exatamente o mesmo erro genérico.
+    if (userRecord.getBool('verified')) {
+      throw genericInvalidError()
+    }
+
+    const now = new Date()
+    const nowIso = now.toISOString()
+    const window10mAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString()
+
+    // 3. A1: Rate limiting e contador acumulado de tentativas por janela de 10 minutos
+    // Soma todas as tentativas de códigos gerados na janela recente para evitar que pedir novo código resete tentativas.
+    const recentRecords = txApp.findRecordsByFilter(
+      'verification_codes',
+      'email = {:email} && created >= {:window}',
+      '-created',
+      20,
+      0,
+      { email, window: window10mAgo },
+    )
+
+    if (!recentRecords || recentRecords.length === 0) {
+      throw genericInvalidError()
+    }
+
+    let totalWindowAttempts = 0
+    for (const r of recentRecords) {
+      totalWindowAttempts += r.getInt('attempts') || 0
+    }
+
+    if (totalWindowAttempts >= 10) {
+      throw new BadRequestError(
+        'Limite de tentativas excedido. Solicite um novo código após alguns minutos.',
+      )
+    }
+
+    // 4. Pega o código ativo mais recente não consumido
+    const activeRecord = recentRecords.find((r) => !r.getBool('consumed'))
+    if (!activeRecord) {
+      throw genericInvalidError()
+    }
+
+    const currentAttempts = activeRecord.getInt('attempts') || 0
+    const expiresAt = activeRecord.getString('expiresAt')
+
+    // Limite de 5 tentativas por código individual
+    if (currentAttempts >= 5) {
+      activeRecord.set('consumed', true)
+      txApp.save(activeRecord)
       throw new BadRequestError('Limite de tentativas excedido. Solicite um novo código.')
     }
-    throw genericInvalidError()
-  }
 
-  // Código correto: marca código como consumido e usuário como verificado
-  activeRecord.set('consumed', true)
-  e.app.save(activeRecord)
+    // Verifica expiração
+    if (expiresAt && expiresAt < nowIso) {
+      activeRecord.set('consumed', true)
+      txApp.save(activeRecord)
+      throw genericInvalidError()
+    }
 
-  userRecord.setVerified(true)
-  e.app.save(userRecord)
+    // Verifica correspondência do código
+    const storedCode = activeRecord.getString('code')
+    if (storedCode !== code) {
+      const nextAttempts = currentAttempts + 1
+      activeRecord.set('attempts', nextAttempts)
+      if (nextAttempts >= 5) {
+        activeRecord.set('consumed', true)
+      }
+      txApp.save(activeRecord)
+
+      if (nextAttempts >= 5 || totalWindowAttempts + 1 >= 10) {
+        throw new BadRequestError('Limite de tentativas excedido. Solicite um novo código.')
+      }
+      throw genericInvalidError()
+    }
+
+    // Código correto: consome o código e marca todos os códigos anteriores como consumidos
+    activeRecord.set('consumed', true)
+    txApp.save(activeRecord)
+
+    for (const r of recentRecords) {
+      if (r.id !== activeRecord.id && !r.getBool('consumed')) {
+        r.set('consumed', true)
+        txApp.save(r)
+      }
+    }
+
+    userRecord.setVerified(true)
+    txApp.save(userRecord)
+    verifiedSuccess = true
+  })
 
   return e.json(200, {
     success: true,

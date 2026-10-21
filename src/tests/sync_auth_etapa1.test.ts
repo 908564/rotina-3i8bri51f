@@ -205,4 +205,146 @@ describe('ETAPA 1 — Testes Obrigatórios de Login, Segurança e Sincronizaçã
     expect(import.meta.env.VITE_PB_SUPERUSER_KEY).toBeUndefined()
     expect(import.meta.env.VITE_ADMIN_TOKEN).toBeUndefined()
   })
+
+  // T14 (A3): Validação estrita no PULL de sync descarta registros inválidos
+  it('T14: applyRemoteRecord descarta registros com UUIDs, datas ou tipos inválidos', async () => {
+    const validUuid = crypto.randomUUID()
+
+    // 1. Registro com clientId que não é UUID (para entidade que requer UUID)
+    const invalidClientIdRecord = {
+      entity: 'note',
+      clientId: 'not-a-valid-uuid',
+      deletedAt: null,
+      clientUpdatedAt: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      data: {
+        id: 'not-a-valid-uuid',
+        title: 'Nota Inválida',
+        date: '2025-05-10',
+        created: new Date().toISOString(),
+        updated: new Date().toISOString(),
+      },
+    }
+    const appliedInvalidId = await (syncEngine as any).applyRemoteRecord(invalidClientIdRecord)
+    expect(appliedInvalidId).toBe(false)
+
+    // 2. Registro com data criada inválida (não ISO)
+    const invalidDateRecord = {
+      entity: 'note',
+      clientId: validUuid,
+      deletedAt: null,
+      clientUpdatedAt: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      data: {
+        id: validUuid,
+        title: 'Nota Inválida',
+        date: '2025-05-10',
+        created: 'data-corrompida',
+        updated: new Date().toISOString(),
+      },
+    }
+    const appliedInvalidDate = await (syncEngine as any).applyRemoteRecord(invalidDateRecord)
+    expect(appliedInvalidDate).toBe(false)
+
+    // 3. Registro válido deve ser aceito
+    const validRecord = {
+      entity: 'note',
+      clientId: validUuid,
+      deletedAt: null,
+      clientUpdatedAt: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      data: {
+        id: validUuid,
+        title: 'Nota Válida',
+        body: 'Texto seguro',
+        date: '2025-05-10',
+        tags: ['teste'],
+        created: new Date().toISOString(),
+        updated: new Date().toISOString(),
+      },
+    }
+    const appliedValid = await (syncEngine as any).applyRemoteRecord(validRecord)
+    expect(appliedValid).toBe(true)
+
+    const saved = await idb.get<any>(idb.STORE_ESCRITA, validUuid)
+    expect(saved).toBeDefined()
+    expect(saved.title).toBe('Nota Válida')
+  })
+
+  // T15 (A4): Entidade task é sincronizada com tombstone e resolução por clientUpdatedAt
+  it('T15: Entidade task é gravada no banco local, suporta resolução de conflitos e tombstone', async () => {
+    const taskId = crypto.randomUUID()
+    const taskCreatedAt = '2025-05-10T10:00:00.000Z'
+    const taskUpdatedAt1 = '2025-05-10T10:05:00.000Z'
+    const taskUpdatedAt2 = '2025-05-10T10:15:00.000Z'
+
+    // 1. Recebe tarefa remota
+    const remoteTask1 = {
+      entity: 'task',
+      clientId: taskId,
+      deletedAt: null,
+      clientUpdatedAt: taskUpdatedAt1,
+      updated: taskUpdatedAt1,
+      data: {
+        id: taskId,
+        title: 'Tarefa Inicial',
+        module: 'geral',
+        priority: 'normal',
+        status: 'open',
+        subtasks: [{ id: crypto.randomUUID(), title: 'Subtarefa 1', done: false }],
+        createdAt: taskCreatedAt,
+        updatedAt: taskUpdatedAt1,
+      },
+    }
+
+    const appliedTask1 = await (syncEngine as any).applyRemoteRecord(remoteTask1)
+    expect(appliedTask1).toBe(true)
+
+    let storedTask = await idb.get<any>(idb.STORE_TASKS, taskId)
+    expect(storedTask).toBeDefined()
+    expect(storedTask.title).toBe('Tarefa Inicial')
+    expect(storedTask.subtasks.length).toBe(1)
+
+    // 2. Recebe atualização mais recente (clientUpdatedAt2 > clientUpdatedAt1)
+    const remoteTask2 = {
+      entity: 'task',
+      clientId: taskId,
+      deletedAt: null,
+      clientUpdatedAt: taskUpdatedAt2,
+      updated: taskUpdatedAt2,
+      data: {
+        id: taskId,
+        title: 'Tarefa Concluída e Atualizada',
+        module: 'geral',
+        priority: 'high',
+        status: 'done',
+        subtasks: [{ id: crypto.randomUUID(), title: 'Subtarefa 1', done: true }],
+        createdAt: taskCreatedAt,
+        updatedAt: taskUpdatedAt2,
+      },
+    }
+
+    const appliedTask2 = await (syncEngine as any).applyRemoteRecord(remoteTask2)
+    expect(appliedTask2).toBe(true)
+
+    storedTask = await idb.get<any>(idb.STORE_TASKS, taskId)
+    expect(storedTask.title).toBe('Tarefa Concluída e Atualizada')
+    expect(storedTask.status).toBe('done')
+    expect(storedTask.priority).toBe('high')
+
+    // 3. Tombstone (exclusão remota)
+    const remoteDeleteTask = {
+      entity: 'task',
+      clientId: taskId,
+      deletedAt: new Date().toISOString(),
+      clientUpdatedAt: new Date().toISOString(),
+      data: null,
+    }
+
+    const appliedDelete = await (syncEngine as any).applyRemoteRecord(remoteDeleteTask)
+    expect(appliedDelete).toBe(true)
+
+    storedTask = await idb.get<any>(idb.STORE_TASKS, taskId)
+    expect(storedTask).toBeUndefined()
+  })
 })

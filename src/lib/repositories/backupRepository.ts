@@ -883,6 +883,34 @@ function sanitizeSettings(item: any): AppSettings | undefined {
   }
 }
 
+export const backupSanitizers = {
+  isValidUuid,
+  isValidIsoDate,
+  sanitizeEscritaNote,
+  sanitizeLivro,
+  sanitizeLivroAnotacao,
+  sanitizeLeituraHistorico,
+  sanitizeTreinoPlanoSemanal,
+  sanitizeTreinoLog,
+  sanitizeCourse,
+  sanitizeStudyPage,
+  sanitizeStudyCertificate,
+  sanitizeStudySession,
+  sanitizeStudyGoal,
+  sanitizeDaySummary,
+  sanitizeTask,
+  sanitizeIdea,
+  sanitizeActivityPlan,
+  sanitizeActivityLog,
+  sanitizeModuleDay,
+  sanitizeMedal,
+  sanitizeProject,
+  sanitizeAchievement,
+  sanitizeExperience,
+  sanitizeWorkNote,
+  sanitizeSettings,
+}
+
 export const backupRepository = {
   async getCollectionCounts(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {}
